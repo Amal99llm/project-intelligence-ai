@@ -1,31 +1,28 @@
-# Web Framework
+# ── Web Framework ──────────────────────────────────────────────────────────
 flask==3.0.3
+werkzeug==3.0.4
 flask-limiter==3.8.0
+gunicorn==22.0.0
 
-# Data Processing
+# ── Data Processing ───────────────────────────────────────────────────────
 pandas==2.2.2
 openpyxl==3.1.5
 
-# PDF Processing
+# ── PDF Processing ────────────────────────────────────────────────────────
 pypdf==4.3.1
 
-# AI / LLM  (swap this section for local LLM later)
+# ── AI / LLM (Azure OpenAI عبر مكتبة openai) ─────────────────────────────
 openai==1.40.0
 
-# Vector Database
+# ── Vector Database (فهرسة العقود / contract chunks) ─────────────────────
 chromadb==0.5.5
 
-# Database ORM  (swap dialect for PostgreSQL later)
+# ── Database ORM ──────────────────────────────────────────────────────────
 sqlalchemy==2.0.32
+# ⬅️ أضف هذا لو قاعدة البيانات PostgreSQL بدل SQLite:
+# psycopg2-binary==2.9.9
 
-# Security & Utilities
+# ── Security & Utilities ──────────────────────────────────────────────────
 python-dotenv==1.0.1
 bleach==6.1.0
-werkzeug==3.0.4
 rapidfuzz==3.9.6
-
-# Telegram Bot (Phase 2 — install when needed)
-# python-telegram-bot==21.5
-# الأساسيات لتشغيل التطبيق على Railway
-flask>=3.0.0
-gunicorn>=21.2.0
