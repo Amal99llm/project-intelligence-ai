@@ -2,21 +2,31 @@
 app.py — Elm Project Intelligence Platform
 Flask application with all routes.
 
-NOTE ON SCOPE: per explicit product decision, this is a local-only demo
-running on the operator's own machine, not shared or published. No
-authentication/authorization/RBAC/HTTPS/rate limiting has been added here
--- those are tracked in PRODUCTION_SECURITY_TODO.md for when the system is
-actually deployed to a server. What HAS been hardened in this pass:
-input validation, exception handling (no raw tracebacks to the client),
-a configurable, localhost-by-default bind address, and a signed,
-server-side session id (never the client-supplied X-User-ID header) used
-to key modules.session_context's per-session conversation state.
+SCOPE UPDATE (see git history / PRODUCTION_SECURITY_TODO.md for the prior
+state): this build is now deployed to a shared Railway URL so a specific
+manager can test it remotely, for a limited window -- it is no longer the
+local-only demo described in the original note below. Authentication has
+been added accordingly (see `require_auth` below). Everything else that was
+already hardened in the local-only pass is unchanged: input validation,
+exception handling (no raw tracebacks to the client), a configurable bind
+address, and a signed, server-side session id (never the client-supplied
+X-User-ID header) used to key modules.session_context's per-session
+conversation state.
+
+AUTH MODEL: single shared username/password (HTTP Basic Auth) read from the
+APP_USER / APP_PASS environment variables (set in Railway → Variables,
+never committed to source). If either is missing, every protected route
+denies access by default rather than silently opening up. This is
+intentionally simple -- it is meant for a short, single-reviewer trial, not
+multi-user access control. /health stays open (no data, needed for
+Railway's own health checks).
 """
 
 import sys
 import os
 import logging
 import uuid
+from functools import wraps
 
 # Windows UTF-8 fix
 if sys.platform == "win32":
@@ -25,7 +35,7 @@ if sys.platform == "win32":
     os.environ.setdefault("PYTHONUTF8", "1")
 
 import bleach
-from flask import Flask, render_template, request, jsonify, session as flask_session
+from flask import Flask, render_template, request, jsonify, session as flask_session, Response
 from datetime import date
 
 import config
@@ -76,9 +86,59 @@ def _get_session_id() -> str:
     return flask_session["sid"]
 
 
+# ── Auth (added for the shared Railway trial — see module docstring) ─────────
+
+def _client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    return forwarded.split(",")[0].strip() if forwarded else (request.remote_addr or "unknown")
+
+
+def _credentials_ok(username: str, password: str) -> bool:
+    expected_user = os.environ.get("APP_USER")
+    expected_pass = os.environ.get("APP_PASS")
+    if not expected_user or not expected_pass:
+        # Fail closed: misconfiguration must never silently mean "open to everyone".
+        logger.warning("APP_USER/APP_PASS not set — denying all access until configured.")
+        return False
+    return username == expected_user and password == expected_pass
+
+
+def _unauthorized() -> Response:
+    return Response(
+        "🔒 تسجيل الدخول مطلوب للوصول لهذا التطبيق.",
+        401,
+        {"WWW-Authenticate": 'Basic realm="Restricted Access"'},
+    )
+
+
+def require_auth(view_func):
+    """HTTP Basic Auth gate for the shared trial deployment. Every attempt
+    (missing, wrong, or successful) is logged through the app's existing
+    logger/audit file, alongside the client IP and requested path."""
+    @wraps(view_func)
+    def wrapped(*args, **kwargs):
+        auth = request.authorization
+        ip = _client_ip()
+
+        if not auth:
+            logger.warning("AUTH: no credentials | ip=%s | path=%s", ip, request.path)
+            return _unauthorized()
+
+        if not _credentials_ok(auth.username, auth.password):
+            logger.warning("AUTH: failed login | ip=%s | username_tried=%s | path=%s",
+                            ip, auth.username, request.path)
+            return _unauthorized()
+
+        logger.info("AUTH: ok | ip=%s | user=%s | path=%s", ip, auth.username, request.path)
+        return view_func(*args, **kwargs)
+
+    return wrapped
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route("/")
+@require_auth
 def index():
     try:
         last_sync = get_last_sync_time()
@@ -89,6 +149,7 @@ def index():
 
 
 @app.route("/ask", methods=["POST"])
+@require_auth
 def ask():
     try:
         raw_query = request.json.get("query", "") if request.is_json else request.form.get("query", "")
@@ -118,6 +179,7 @@ def ask():
 
 
 @app.route("/upload", methods=["POST"])
+@require_auth
 def upload():
     if "file" not in request.files:
         return jsonify({"error": "لم يتم إرفاق أي ملف."}), 400
@@ -153,6 +215,7 @@ def upload():
 
 
 @app.route("/sync", methods=["POST"])
+@require_auth
 def manual_sync():
     try:
         summary = sync_all()
@@ -171,6 +234,7 @@ def manual_sync():
 
 
 @app.route("/sync/status")
+@require_auth
 def sync_status():
     try:
         return jsonify({"last_sync": get_last_sync_time()})
@@ -180,6 +244,7 @@ def sync_status():
 
 
 @app.route("/api/me")
+@require_auth
 def api_me():
     """Return current user info from session or SSO headers."""
     user = {
@@ -201,6 +266,7 @@ def api_me():
 
 
 @app.route("/api/projects")
+@require_auth
 def api_projects():
     """Return projects and the canonical database-backed dashboard KPIs.
 
@@ -223,6 +289,7 @@ def api_projects():
 
 
 @app.route("/report/<report_type>")
+@require_auth
 def get_report(report_type: str):
     from modules.ai_engine import generate_report
     allowed = {"executive", "risk", "collection", "backlog"}
@@ -238,6 +305,9 @@ def get_report(report_type: str):
 
 @app.route("/health")
 def health():
+    # Intentionally NOT behind require_auth: Railway (and any load balancer)
+    # needs this reachable to confirm the service is alive, and it exposes
+    # no project data — just a static status/version string.
     return jsonify({"status": "ok", "version": "2.0.0"})
 
 
@@ -247,15 +317,19 @@ if __name__ == "__main__":
     host = config.APP_HOST
     port = config.APP_PORT
 
+    if not os.environ.get("APP_USER") or not os.environ.get("APP_PASS"):
+        print("[WARNING] APP_USER / APP_PASS are not set — every protected route will "
+              "return 401 until both are configured (see Railway → Variables).")
+
     if host == "127.0.0.1":
         print(f"[Local-only mode] Listening on http://127.0.0.1:{port}/ -- "
               f"not reachable from any other device on the network.")
     elif host == "0.0.0.0":
-        print(f"[LAN-accessible mode] Listening on 0.0.0.0:{port} -- "
-              f"WARNING: this app has NO authentication. Any device on the same "
-              f"network can reach every route, including /api/projects (full "
-              f"portfolio data). Only use this on a trusted private network, "
-              f"and only for as long as you need it.")
+        print(f"[Shared trial mode] Listening on 0.0.0.0:{port} -- protected by HTTP Basic "
+              f"Auth (APP_USER/APP_PASS). Anyone with those credentials and the public URL "
+              f"can reach every route, including /api/projects (full portfolio data). "
+              f"Only share the credentials with the intended reviewer, and rotate/remove "
+              f"them once the trial window ends.")
     else:
         print(f"[Custom bind] Listening on {host}:{port}.")
 
