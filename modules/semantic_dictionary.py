@@ -195,12 +195,10 @@ def detect_requested_fields(query: str) -> list[FieldDefinition]:
         if best:
             matches.append((best, field))
     matches.sort(key=lambda item: (-item[0], item[1].canonical))
-    if not matches:
-        return []
     # Keep explicitly distinct fields, but suppress shorter aliases embedded
     # in a stronger semantic match (e.g. contract_value inside total_contract_value).
-    strongest = matches[0][0]
-    selected = [field for length, field in matches if length >= strongest - 2]
+    strongest = matches[0][0] if matches else 0
+    selected = [field for length, field in matches if length >= strongest - 2] if matches else []
     by_name = {field.canonical: field for field in FIELD_DEFINITIONS}
     # Coordinated questions explicitly request distinct concepts; preserving
     # both is more important than suppressing a shorter embedded alias.
@@ -211,6 +209,10 @@ def detect_requested_fields(query: str) -> list[FieldDefinition]:
         "status": ("حالته", "الحاله", "الحالة"),
         "progress_completed": ("نسبه انجازه", "نسبة إنجازه", "نسبه الانجاز", "نسبة الإنجاز"),
         "backlog": ("اعمال متبقيه", "أعمال متبقية", "باقي فيه", "backlog", "باك لوق"),
+        "pl": ("ربحه", "وربحه", "صافي ربحه", "كم ربح"),
+        "profit_pct": ("هامشه", "وهامشه", "نسبه ربحه", "نسبة ربحه"),
+        "total_cost": ("صرفنا فيه", "كم صرفنا", "المصروف عليه"),
+        "total_revenue": ("دخلنا منه", "وش دخلنا", "ايراده"),
     }
     for canonical, aliases in concepts.items():
         if any(normalize_text(alias) in normalized for alias in aliases) and by_name[canonical] not in selected:
@@ -298,8 +300,10 @@ SMALL_TALK_PATTERNS = {
     "morning":   ("صباح الخير", "صباح النور", "good morning"),
     "evening":   ("مساء الخير", "مساء النور", "good evening"),
     "wellbeing": ("كيف حالك", "كيفك", "شلونك", "كيف الحال", "how are you", "عامل ايه"),
-    "thanks":    ("شكرا", "شكراً", "مشكور", "يعطيك العافيه", "يسلموا", "thank you", "thanks", "ثانكس"),
-    "bye":       ("مع السلامه", "باي", "وداعا", "الى اللقاء", "bye", "goodbye"),
+    "thanks":    ("شكرا", "شكراً", "يسلموا", "thank you", "thanks", "ثانكس"),
+    "bye":       ("مع السلامه", "في امان الله", "نشوفك على خير", "اشوفك", "باي", "الله يحفظك",
+                  "يعطيك العافيه", "مشكور", "مشكور ما قصرت", "خلاص يعطيك العافيه",
+                  "وداعا", "الى اللقاء", "bye", "goodbye"),
 }
 
 

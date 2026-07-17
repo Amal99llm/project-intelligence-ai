@@ -25,6 +25,7 @@ import config
 from modules import query_schema
 from modules.project_entity_resolver import normalize_project_text
 from modules.semantic_dictionary import detect_portfolio_operation, detect_semantic_intent
+from modules.contract_semantics import parse_future_period_days
 
 logger = logging.getLogger(__name__)
 
@@ -139,9 +140,10 @@ def _deterministic_conversational_spec(query: str, today_str: str) -> dict | Non
     """
     q = normalize_project_text(query)
     today = date.fromisoformat(today_str)
-    if any(term in q for term in ("تنتهي خلال شهر", "ينتهي خلال شهر", "تنتهي خلال 30", "ending within a month")):
+    future_days = parse_future_period_days(query)
+    if future_days and any(term in q for term in ("تنتهي", "ينتهي", "تخلص", "ending")):
         return query_schema.validate_query_spec({
-            "filters": [{"column": "days_remaining", "op": "between", "value": 0, "value2": 30}],
+            "filters": [{"column": "days_remaining", "op": "between", "value": 0, "value2": future_days}],
             "sort": {"column": "days_remaining", "direction": "ASC"}, "limit": 10,
         })
     if any(term in q for term in ("بدات هالسنه", "بدات هذه السنه", "started this year")):

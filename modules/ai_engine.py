@@ -14,7 +14,8 @@ Entry pipeline per turn:
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from modules.database import log_query
 from modules import session_context
@@ -41,6 +42,7 @@ from modules.semantic_dictionary import (
     detect_requested_fields, detect_small_talk, is_methodology_question,
 )
 from modules.response_formatter import format_delay_status, format_project_metrics
+from modules.contract_semantics import analyze_contract_request, render_contract_answer
 from modules.knowledge_boundary import classify_boundary, boundary_answer
 from modules.executive_analysis import format_attention_summary, project_attention
 from modules import query_builder, query_executor, query_schema, response_formatter, verification
@@ -57,7 +59,9 @@ _ORDINAL_NORM = {normalize_project_text(k): v for k, v in {
     "first":0,"second":1,"third":2,"fourth":3,"fifth":4,
     "1":0,"2":1,"3":2,"4":3,"5":4,
 }.items()}
-_YES_NORM = {normalize_project_text(w) for w in ("نعم","ايوه","أيوه","اه","آه","صح","yes","y")}
+_YES_NORM = {normalize_project_text(w) for w in (
+    "نعم","ايوه","أيوه","إيه","ايه","يب","اه","آه","صح","صحيح","أكيد","اكيد","هو","هذا","yes","y"
+)}
 _LAST_NORM = {normalize_project_text(w) for w in ("الأخير", "الاخير", "آخر واحد", "last")}
 _NEXT_NORM = {normalize_project_text(w) for w in ("اللي بعده", "التالي", "next")}
 
@@ -577,6 +581,27 @@ def _orchestrate(u: Understanding, query: str, today: date, ctx: dict, projects:
 def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     upd: dict = {}
 
+    # Social conversation always outranks pending choices and project context.
+    if detect_small_talk(query):
+        u = Understanding(intent=SMALL_TALK, scope="unknown", confidence=1.0, method="fast_path")
+        return _orchestrate(u, query, today, ctx, [])
+
+    q_normalized = normalize_project_text(query)
+    pending_options = (ctx.get("pending_project_confirmation") or {}).get("candidates") or []
+    if len(pending_options) >= 2 and any(marker in q_normalized for marker in ("قارن بينهم", "قارن بينهما", "كلاهما")):
+        projects = fetch_enriched_projects(today=today)
+        by_code = {p.get("project_code"): p for p in projects}
+        rows = [by_code.get(item["project_code"]) for item in pending_options[:2]]
+        rows = [row for row in rows if row]
+        if len(rows) == 2:
+            from modules.comparison_engine import format_comparison
+            codes = [row["project_code"] for row in rows]
+            return format_comparison(rows, query), PROJECT_COMPARISON, None, {
+                "comparison_project_ids": codes,
+                "last_comparison": {"codes": codes, "field": None},
+                "last_result_type": "comparison",
+            }
+
     # ── Step 0: Pending confirmation ─────────────────────────────────────────
     pending = _try_resolve_pending(query, ctx)
     if pending is not None:
@@ -601,6 +626,14 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
             except Exception:
                 text = verification.FALLBACK_MESSAGE
             return text, CONTRACT_DOC, None, upd
+        if kind == "contract_metrics":
+            orig = pstate.get("original_query") or query
+            request = analyze_contract_request(orig)
+            row, src = _lookup_verified(code, today, projects, orig)
+            if not row or not request:
+                return verification.PROJECT_FALLBACK_MESSAGE, PROJECT_KPI, None, upd
+            upd.update({"last_result_type": "project_kpi", "last_user_intent": request.operation})
+            return render_contract_answer(row, request, today), PROJECT_KPI, src, upd
         orig = pstate.get("original_query") or query
         orig_field = detect_requested_field(orig)
         row, src = _lookup_verified(code, today, projects, orig,
@@ -608,7 +641,69 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         if not row:
             return verification.PROJECT_FALLBACK_MESSAGE, PROJECT_SUMMARY, None, upd
         text = _format_project(row, orig, ctx, orig_field.canonical if orig_field else None, "field_lookup")
+        upd["last_result_type"] = "project_kpi" if orig_field else "project_summary"
         return text, PROJECT_KPI if orig_field else PROJECT_SUMMARY, src, upd
+
+    # Contract/timeline semantics share one structured operation and may carry
+    # several metrics. Resolve a current-turn project before active context.
+    contract_request = analyze_contract_request(query)
+    if contract_request:
+        projects = fetch_enriched_projects(today=today)
+        phrase = extract_project_phrase(query)
+        resolution = resolve_project(query, projects) if len(phrase) >= 3 else None
+        if resolution and resolution.status in {"ambiguous", "confirmation"}:
+            pending_state = _pending_state(resolution, "contract_metrics", original_query=query)
+            return format_resolution_prompt(resolution), PROJECT_KPI, None, {
+                "pending_project_confirmation": pending_state,
+                "last_disambiguation_options": list(pending_state["candidates"]),
+                "last_disambiguation_query": query,
+            }
+        if resolution and resolution.status == "matched":
+            code = resolution.canonical_project_code
+            name = resolution.candidates[0].display_name
+        else:
+            code = ctx.get("active_project_code") or ctx.get("last_project_code")
+            name = ctx.get("active_project_display_name") or ctx.get("last_project_display_name")
+        if not code:
+            return "تقصد أي مشروع؟", PROJECT_KPI, None, {}
+        row, src = _lookup_verified(code, today, projects, query)
+        if not row:
+            return verification.PROJECT_FALLBACK_MESSAGE, PROJECT_KPI, None, {}
+        return render_contract_answer(row, contract_request, today), PROJECT_KPI, src, {
+            "active_project_code": code, "active_project_display_name": name,
+            "last_project_code": code, "last_project_display_name": name,
+            "last_result_type": "project_kpi",
+            "last_requested_metric": contract_request.metrics[-1] if contract_request.metrics else contract_request.operation,
+            "last_user_intent": contract_request.operation,
+        }
+
+    # A reference to the previous project uses bounded project history.
+    q_nav = normalize_project_text(query)
+    if any(marker in q_nav for marker in (
+        "المشروع اللي قبله", "المشروع اللي قبل", "طيب السابق", "المشروع السابق", "طيب المشروع الثاني",
+    )):
+        recent = ctx.get("recent_project_ids") or []
+        if len(recent) > 1:
+            projects = fetch_enriched_projects(today=today)
+            code = recent[1]
+            row, src = _lookup_verified(code, today, projects, query)
+            if row:
+                name = row.get("project_name_ar") or row.get("project_name_en") or code
+                return _format_project(row, query, ctx, None, "summary"), PROJECT_SUMMARY, src, {
+                    "active_project_code": code, "active_project_display_name": name,
+                    "last_project_code": code, "last_project_display_name": name,
+                    "last_result_type": "project_summary", "last_requested_metric": None,
+                }
+
+    if q_nav in {"مشروعهم", "هذا المشروع", "المشروع ذا", "نفس المشروع"} and ctx.get("active_project_code"):
+        projects = fetch_enriched_projects(today=today)
+        code = ctx["active_project_code"]
+        row, src = _lookup_verified(code, today, projects, query)
+        if row:
+            return _format_project(row, query, ctx, None, "summary"), PROJECT_SUMMARY, src, {
+                "active_project_code": code, "last_project_code": code,
+                "last_result_type": "project_summary", "last_requested_metric": None,
+            }
 
     # Multi-field followups are answered deterministically from one verified
     # project snapshot instead of discarding every field after the first.
@@ -655,7 +750,7 @@ def answer(query: str, user_id: str = "anonymous",
     query = query.strip()[:2000]
     if not query:
         return {"answer": "من فضلك اكتب سؤالك.", "query_type": "none"}
-    today = date.today()
+    today = datetime.now(ZoneInfo("Asia/Riyadh")).date()
     session_id = session_id or "no-session"
     ctx = session_context.get_context(session_id)
     try:
@@ -679,7 +774,7 @@ def answer(query: str, user_id: str = "anonymous",
 
 
 def generate_report(report_type: str) -> str:
-    today = date.today()
+    today = datetime.now(ZoneInfo("Asia/Riyadh")).date()
     try:
         projects = fetch_enriched_projects(today=today)
         if not projects:

@@ -41,6 +41,7 @@ _REQUEST_WORDS = {
     "اعطني", "اعطيني", "ابي", "ابغي", "اريد", "احتاج", "لو", "سمحت",
     "من", "فضلك", "ملخص", "لخص", "تفاصيل", "معلومات", "بيانات", "عن",
     "مشروع", "المشروع", "ومشروع", "وعن", "حاله", "وضع", "وش", "كيف", "صار", "عليه", "علومه",
+    "حق", "تبع", "الخاص", "ب", "اللي", "اسمه", "ذا", "هذا",
     "ما", "هو", "هي", "لي", "اظهر", "اعرض",
     "show", "give", "me", "summary", "details", "information", "about",
     "project", "the", "please", "status", "of",
@@ -52,6 +53,7 @@ _REQUEST_WORDS = {
     "تكاليف", "تكلفة", "تكلفه",
     "ربح", "ربحه", "ربحها",
     "هامش",
+    "متى", "بدا", "بدأ", "ينتهي", "يخلص", "نهايه", "نهاية", "باقي", "له", "على",
     "ملخصه", "ملخصها",
     "تقدم", "التقدم", "نسبة", "نسبه",
 }
@@ -67,6 +69,7 @@ def extract_project_phrase(query: str) -> str:
     """Remove request-language tokens and retain the likely entity phrase."""
     normalized = normalize_project_text(query)
     tokens = [token for token in normalized.split() if token not in _REQUEST_WORDS]
+    tokens = [token[1:] if token.startswith(("عال", "بال")) and len(token) > 4 else token for token in tokens]
     return " ".join(tokens).strip()
 
 

@@ -54,6 +54,10 @@ def _empty_context() -> dict[str, Any]:
         # ── New structured metadata ──────────────────────────────────────────
         "active_project_code": None,
         "active_project_display_name": None,
+        "recent_project_ids": [],
+        "previous_project_ids": [],
+        "comparison_project_ids": [],
+        "last_user_intent": None,
         "active_project_depth": 0,
         "last_answered_fields": [],        # list[str] — canonical field names
         "conversation_phase": "opening",   # opening | deep_dive | assessment | summary
@@ -118,6 +122,11 @@ def update_context(session_id: str, **fields: Any) -> None:
 
             if new_code and new_code != old_code:
                 project_changed = True
+                recent = [new_code] + [code for code in entry.get("recent_project_ids", []) if code != new_code]
+                if old_code and old_code not in recent:
+                    recent.append(old_code)
+                fields["recent_project_ids"] = recent[:5]
+                fields["previous_project_ids"] = recent[1:5]
                 # New project → reset depth and phase
                 fields["active_project_depth"] = 1
                 fields["conversation_phase"] = "opening"

@@ -34,6 +34,7 @@ from typing import Any
 
 
 import config
+from modules.contract_semantics import parse_future_period_days
 from modules.project_entity_resolver import normalize_project_text
 from modules.semantic_dictionary import (
     FIELDS,
@@ -287,7 +288,7 @@ def understand(query: str, ctx: dict | None = None) -> Understanding:
     sem = detect_semantic_intent(query)
     portfolio_op = detect_portfolio_operation(query)
     temporal_filter = None
-    if any(term in q_norm for term in ("تنتهي خلال شهر", "ينتهي خلال شهر", "تنتهي خلال 30", "ending within a month")):
+    if any(term in q_norm for term in ("تنتهي", "ينتهي", "تخلص", "ending")) and parse_future_period_days(query):
         temporal_filter = "ending_within_month"
     elif any(term in q_norm for term in ("بدات هالسنه", "بدأت هالسنة", "بدات هذه السنه", "بدأت هذه السنة", "started this year")):
         temporal_filter = "started_this_year"

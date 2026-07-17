@@ -6,6 +6,8 @@ from modules.ai_engine import _answer_inner, _try_resolve_pending
 from modules.session_context import get_context, update_context
 from modules.followup_gate import check as followup_check
 from modules.semantic_dictionary import detect_requested_fields
+from modules.project_entity_resolver import resolve_project
+from modules.contract_semantics import parse_future_period_days
 from modules.understanding import PORTFOLIO_FILTER, PORTFOLIO_RANKING, understand
 
 
@@ -175,3 +177,85 @@ def test_multi_field_and_delay_answers_run_through_active_context(seeded_db, tod
     delay, _, _ = _turn("details", "هل المشروع متأخر؟", today)
     assert delay.startswith(("نعم،", "لا،"))
     assert "2027" in delay or "يوم" in delay
+
+
+def test_saudi_typo_project_resolution_requests_confirmation():
+    projects = [{
+        "project_code": "R", "project_name_ar": "الباحث الاجتماعي الثاني",
+        "project_name_en": "Social Researcher II",
+    }]
+    resolution = resolve_project("اعطيني ملخص عن الباخث", projects)
+    assert resolution.status in {"confirmation", "matched"}
+    assert resolution.candidates[0].project_code == "R"
+
+
+@pytest.mark.parametrize("reply", ["نعم", "ايوه", "إيه", "يب", "صح", "صحيح", "أكيد", "هو", "هذا"])
+def test_saudi_confirmation_variants_execute_pending_request(reply):
+    ctx = {"pending_project_confirmation": {
+        "candidates": [{"project_code": "R", "display_name": "الباحث الاجتماعي الثاني"}],
+        "kind": "lookup", "original_query": "اعطني ملخص الباحث",
+    }}
+    assert _try_resolve_pending(reply, ctx)[0] == "R"
+
+
+def test_contract_dialogue_sequence_uses_active_project(seeded_db, today, no_ai):
+    update_context("contract", active_project_code="PRJ-001", last_project_code="PRJ-001",
+                   last_result_type="project_summary")
+    questions = [
+        ("كم قيمة العقد؟", "قيمة العقد الإجمالية"),
+        ("كم العقد الأساسي؟", "قيمة العقد الأساسية"),
+        ("كم قيمة التعديلات؟", "قيمة تعديلات العقد"),
+        ("بعد التعديلات كم صار؟", "بعد التعديلات"),
+        ("متى ينتهي؟", "ينتهي المشروع في"),
+        ("كم باقي له؟", "باقي على نهاية المشروع"),
+        ("كم مدة عقده؟", "مدة المشروع المخططة"),
+        ("هل عقده قرب ينتهي؟", "العقد"),
+        ("هل صار تعديل على تاريخ النهاية؟", "تاريخ النهاية"),
+    ]
+    for question, expected in questions:
+        answer, _, ctx = _turn("contract", question, today)
+        assert ctx["active_project_code"] == "PRJ-001"
+        assert expected in answer, (question, answer)
+
+
+def test_social_message_beats_pending_project_choice(seeded_db, today, no_ai):
+    pending = {"candidates": [
+        {"project_code": "PRJ-001", "display_name": "أ"},
+        {"project_code": "PRJ-002", "display_name": "ب"},
+    ], "kind": "lookup"}
+    update_context("bye", active_project_code="PRJ-001", pending_project_confirmation=pending)
+    answer, kind, ctx = _turn("bye", "في أمان الله", today)
+    assert kind == "small_talk"
+    assert "أمان الله" in answer or "مع السلامة" in answer or "اللقاء" in answer
+    assert ctx["pending_project_confirmation"] == pending
+
+
+def test_recent_project_navigation_switches_back(seeded_db, today, no_ai):
+    update_context("nav", active_project_code="PRJ-001", last_result_type="project_summary")
+    update_context("nav", active_project_code="PRJ-002", last_result_type="project_summary")
+    answer, _, ctx = _turn("nav", "طيب السابق", today)
+    assert ctx["active_project_code"] == "PRJ-001"
+    assert "Social Researcher II" in answer or "الباحث" in answer
+
+
+def test_colloquial_future_period_parser_and_query_builder():
+    cases = {
+        "وش المشاريع اللي تنتهي خلال أسبوع؟": 7,
+        "وش المشاريع اللي تنتهي الأسبوعين الجاية؟": 14,
+        "وش المشاريع اللي تنتهي خلال 15 يوم؟": 15,
+        "وش المشاريع اللي تنتهي خلال ثلاث شهور؟": 90,
+    }
+    for query, expected in cases.items():
+        assert parse_future_period_days(query) == expected
+        spec = query_builder.build_query(query, "2026-07-17")
+        assert spec["filters"][0]["value2"] == expected
+
+
+def test_contextual_pronouns_and_colloquial_financial_metrics(seeded_db, today, no_ai):
+    update_context("pronouns", active_project_code="PRJ-001", last_project_code="PRJ-001",
+                   last_result_type="project_summary")
+    summary, kind, ctx = _turn("pronouns", "هذا المشروع", today)
+    assert kind == "project_summary" and ctx["active_project_code"] == "PRJ-001"
+    assert "PRJ-001" in summary or "Social Researcher II" in summary or "الباحث" in summary
+    assert "total_cost" in {field.canonical for field in detect_requested_fields("كم صرفنا فيه؟")}
+    assert "total_revenue" in {field.canonical for field in detect_requested_fields("وش دخلنا منه؟")}
