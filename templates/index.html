@@ -367,6 +367,34 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
   .tb-search{width:180px}
   .kpi-grid,.fin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-side,.overview-secondary{grid-template-columns:1fr}.overview-secondary>article:last-child{grid-column:auto}
 }
+
+/* ══ UPLOAD MODAL ══ */
+.upl-ovl{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);z-index:249;opacity:0;pointer-events:none;transition:opacity var(--base)}
+.upl-ovl.show{opacity:1;pointer-events:all}
+.upl-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-46%);width:420px;max-width:92vw;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);z-index:250;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:opacity var(--base),transform var(--base) var(--ease)}
+.upl-panel.open{opacity:1;pointer-events:all;transform:translate(-50%,-50%)}
+.upl-head{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px}
+.upl-title{font-size:13.5px;font-weight:650;color:var(--text);flex:1}
+.upl-close{background:none;border:none;color:var(--text3);cursor:pointer;width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:all var(--fast)}
+.upl-close:hover{color:var(--text);background:var(--surface2)}
+.upl-close svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.upl-body{padding:18px}
+.upl-drop{border:1.5px dashed var(--border2);border-radius:12px;padding:22px 14px;text-align:center;cursor:pointer;transition:all var(--fast);background:var(--surface2)}
+.upl-drop:hover,.upl-drop.drag{border-color:var(--purple);background:var(--purple-dim)}
+.upl-drop svg{width:26px;height:26px;stroke:var(--text3);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;margin-bottom:8px}
+.upl-drop-t{font-size:12.5px;color:var(--text);font-weight:500}
+.upl-drop-s{font-size:10.5px;color:var(--text3);margin-top:3px}
+.upl-fname{margin-top:10px;padding:8px 10px;border-radius:8px;background:var(--surface3);font-size:11.5px;color:var(--text);display:none;align-items:center;gap:6px}
+.upl-fname.show{display:flex}
+.upl-status{margin-top:12px;font-size:11.5px;padding:9px 11px;border-radius:8px;display:none;line-height:1.6}
+.upl-status.show{display:block}
+.upl-status.ok{background:var(--green-dim);color:var(--green)}
+.upl-status.err{background:var(--red-dim);color:var(--red)}
+.upl-status.busy{background:var(--blue-dim);color:var(--light-blue)}
+.upl-actions{padding:0 18px 18px;display:flex;gap:8px;justify-content:flex-start}
+.upl-submit{background:linear-gradient(135deg,var(--purple),var(--blue));color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity var(--fast)}
+.upl-submit:hover{opacity:.9}
+.upl-submit:disabled{opacity:.45;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -420,6 +448,7 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
     <div class="tb-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg><input placeholder="ابحث في المشاريع..." id="globalSearch" oninput="globalFilter()"/></div>
     <div class="tb-actions">
       <div class="tb-btn tb-notif"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+      <button class="tb-sync" onclick="openUpload()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>رفع بيانات</button>
       <button class="tb-sync" onclick="syncData()"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-9 9m0-18a9 9 0 0 1 9 9M3 12a9 9 0 0 0 9 9m0-18a9 9 0 0 0-9 9"/><path d="m15 9 3-3-3-3M9 15l-3 3 3 3"/></svg>تحديث</button>
     </div>
   </div>
@@ -569,6 +598,28 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
 </div>
 </div>
 
+<!-- Upload Modal -->
+<div class="upl-ovl" id="uplOvl" onclick="closeUpload()"></div>
+<div class="upl-panel" id="uplPanel">
+  <div class="upl-head">
+    <div class="upl-title">رفع بيانات المحفظة</div>
+    <button class="upl-close" onclick="closeUpload()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="upl-body">
+    <label class="upl-drop" id="uplDrop">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="upl-drop-t">اضغط لاختيار ملف أو اسحبه هنا</div>
+      <div class="upl-drop-s">Excel (.xlsx) أو PDF للعقود</div>
+      <input type="file" id="uplFile" accept=".xlsx,.xls,.pdf" style="display:none" onchange="uplPick(this.files)"/>
+    </label>
+    <div class="upl-fname" id="uplFname"></div>
+    <div class="upl-status" id="uplStatus"></div>
+  </div>
+  <div class="upl-actions">
+    <button class="upl-submit" id="uplSubmit" onclick="submitUpload()" disabled>رفع الملف</button>
+  </div>
+</div>
+
 <!-- Copilot -->
 <div class="cop-ovl" id="copOvl" onclick="closeCop()"></div>
 <div class="cop-panel" id="copPanel">
@@ -683,6 +734,65 @@ async function loadData(){
   catch(e){console.error(e);}
 }
 async function syncData(){try{await fetch('/sync',{method:'POST'});await loadData();}catch(e){console.error(e);}}
+
+/* ══ UPLOAD ══ */
+let uplSelectedFile=null;
+function openUpload(){
+  $('uplOvl').classList.add('show');
+  $('uplPanel').classList.add('open');
+}
+function closeUpload(){
+  $('uplOvl').classList.remove('show');
+  $('uplPanel').classList.remove('open');
+  uplSelectedFile=null;
+  $('uplFile').value='';
+  $('uplFname').classList.remove('show');
+  $('uplFname').textContent='';
+  $('uplStatus').classList.remove('show','ok','err','busy');
+  $('uplStatus').textContent='';
+  $('uplSubmit').disabled=true;
+}
+function uplPick(files){
+  if(!files||!files.length)return;
+  uplSelectedFile=files[0];
+  $('uplFname').textContent='📄 '+uplSelectedFile.name;
+  $('uplFname').classList.add('show');
+  $('uplSubmit').disabled=false;
+  $('uplStatus').classList.remove('show','ok','err');
+}
+['dragover','dragleave','drop'].forEach(evt=>{
+  document.addEventListener('DOMContentLoaded',()=>{
+    const dz=$('uplDrop');if(!dz)return;
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});
+    dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+    dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');if(e.dataTransfer.files.length)uplPick(e.dataTransfer.files);});
+  });
+});
+async function submitUpload(){
+  if(!uplSelectedFile)return;
+  const st=$('uplStatus'),btn=$('uplSubmit');
+  st.className='upl-status show busy';st.textContent='جاري رفع الملف ومعالجته...';
+  btn.disabled=true;
+  const fd=new FormData();
+  fd.append('file',uplSelectedFile);
+  try{
+    const r=await fetch('/upload',{method:'POST',body:fd});
+    const j=await r.json();
+    if(r.ok){
+      st.className='upl-status show ok';
+      st.textContent='✓ '+(j.message||'تم رفع الملف بنجاح')+(j.details?' — '+Object.entries(j.details).map(([k,v])=>`${k}: ${v}`).join('، '):'');
+      await loadData();
+    }else{
+      st.className='upl-status show err';
+      st.textContent='✕ '+(j.error||'تعذّر رفع الملف');
+      btn.disabled=false;
+    }
+  }catch(e){
+    st.className='upl-status show err';
+    st.textContent='✕ تعذّر الاتصال بالخادم أثناء الرفع';
+    btn.disabled=false;
+  }
+}
 
 /* ══ RENDER ALL ══ */
 function renderAll(){
