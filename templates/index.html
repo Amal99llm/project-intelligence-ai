@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>منصة Elm لذكاء المشاريع</title>
+<link rel="icon" type="image/png" href="/static/elm-logo.png"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<style>
+/* ══════════════════════════════════════
+   DESIGN TOKENS
+══════════════════════════════════════ */
+:root {
+  --ease: cubic-bezier(.4,0,.2,1);
+  --fast:.14s; --base:.22s; --slow:.38s;
+  --r:16px; --r-sm:10px; --r-xs:6px;
+  --sidebar-w:232px;
+  /* brand */
+  --navy:#1B245C;
+  --blue:#4C78C9; --blue-dim:rgba(76,120,201,.12);
+  --green:#3DA66D; --green-dim:rgba(61,166,109,.12);
+  --orange:#D9724E; --orange-dim:rgba(217,114,78,.12);
+  --red:#D95656; --red-dim:rgba(217,86,86,.12);
+  --purple:#6F4ACB; --purple-dim:rgba(111,74,203,.12);
+  --light-purple:#AE8FD5; --light-blue:#6EA4D8; --light-orange:#E8AB78;
+  --amber:#E8AB78; --amber-dim:rgba(232,171,120,.12);
+}
+[data-theme="dark"]{
+  --bg:#111827; --bg2:#151D2B; --surface:#1A2233; --surface2:#202A3D;
+  --surface3:#28344A; --border:rgba(174,143,213,.10); --border2:rgba(174,143,213,.22);
+  --text:#F2F4F8; --text2:#98A1B5; --text3:#5B6478;
+  --sb:#12183D; --sb-border:rgba(174,143,213,.10);
+  --topbar:rgba(17,24,39,.92); --ticker:#151D31;
+  --shadow:0 10px 28px rgba(0,0,0,.28); --shadow-lg:0 20px 60px rgba(0,0,0,.48);
+  --card-hover:rgba(255,255,255,.018);
+}
+[data-theme="light"]{
+  --bg:#F3F5FA; --bg2:#E9EDF5; --surface:#FFFFFF; --surface2:#F8FAFD;
+  --surface3:#EEF2F8; --border:rgba(27,42,74,.09); --border2:rgba(27,42,74,.17);
+  --text:#111827; --text2:#526075; --text3:#8994A7;
+  --sb:#1B245C; --sb-border:rgba(255,255,255,.08);
+  --topbar:rgba(255,255,255,.92); --ticker:#162238;
+  --shadow:0 8px 24px rgba(27,42,74,.08); --shadow-lg:0 18px 45px rgba(27,42,74,.14);
+  --card-hover:rgba(27,42,74,.014);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;-webkit-font-smoothing:antialiased}
+body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13.5px;line-height:1.6;transition:background var(--base),color var(--base)}
+[data-theme="dark"] body{background:radial-gradient(circle at 76% -10%,rgba(76,120,201,.08),transparent 32%),radial-gradient(circle at 18% 110%,rgba(111,74,203,.08),transparent 32%),var(--bg)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.07);border-radius:99px}
+[data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.1)}
+
+/* ══ APP SHELL ══ */
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ══ SIDEBAR ══ */
+.sb{width:var(--sidebar-w);flex-shrink:0;background:linear-gradient(180deg,#1B245C 0%,#171E49 55%,#12183D 100%);display:flex;flex-direction:column;border-left:1px solid var(--sb-border);overflow:hidden;transition:background var(--base);position:relative}
+.sb::before{content:'';position:absolute;inset:0 0 auto;height:160px;background:radial-gradient(circle at 74% 0,rgba(174,143,213,.18),transparent 68%);pointer-events:none}
+.sb-brand{padding:20px 16px 17px;border-bottom:1px solid var(--sb-border);position:relative}
+.sb-logo-row{display:flex;align-items:center;gap:10px;margin:0}
+.sb-logo{height:29px;filter:brightness(0) invert(1);object-fit:contain}
+.sb-vd{width:1px;height:16px;background:rgba(255,255,255,.1);flex-shrink:0}
+.sb-brand-t{color:rgba(255,255,255,.96);font-size:12.5px;font-weight:650;letter-spacing:-.1px}
+.sb-brand-s{font-size:9.5px;color:rgba(255,255,255,.36);margin-top:1px}
+.sb-context{display:flex;align-items:center;gap:8px;margin-top:14px;padding:8px 9px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055)}
+.sb-context-mark{width:7px;height:7px;border-radius:50%;background:var(--light-blue);box-shadow:0 0 12px rgba(110,164,216,.55);flex-shrink:0}
+.sb-context-title{font-size:10.5px;color:rgba(255,255,255,.72);font-weight:550}
+.sb-context-sub{font-size:8.5px;color:rgba(255,255,255,.28);margin-top:1px}
+.sb-nav{flex:1;overflow-y:auto;padding:13px 10px 10px}
+.sb-sec{margin-bottom:19px}
+.sb-lbl{font-size:9px;font-weight:700;color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:1px;padding:0 9px;margin-bottom:6px}
+.ni{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;color:rgba(255,255,255,.48);cursor:pointer;transition:all var(--fast) var(--ease);font-size:12.5px;margin-bottom:3px;position:relative;user-select:none;border:1px solid transparent}
+.ni svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ni:hover{background:rgba(255,255,255,.055);color:rgba(255,255,255,.86);border-color:rgba(255,255,255,.035)}
+.ni.on{background:linear-gradient(135deg,rgba(111,74,203,.23),rgba(76,120,201,.14));color:#fff;font-weight:550;border-color:rgba(174,143,213,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.ni.on::after{content:'';position:absolute;right:0;top:25%;bottom:25%;width:3px;background:linear-gradient(180deg,var(--purple),var(--blue));border-radius:3px 0 0 3px}
+.sb-ai{margin:0 3px 10px;background:linear-gradient(135deg,rgba(111,74,203,.22),rgba(76,120,201,.13));border:1px solid rgba(174,143,213,.24);border-radius:12px;padding:12px 13px;cursor:pointer;transition:all var(--fast) var(--ease);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.sb-ai:hover{background:linear-gradient(135deg,rgba(111,74,203,.30),rgba(76,120,201,.19));transform:translateY(-1px)}
+.sb-ai-lbl{font-size:9px;font-weight:700;color:var(--light-purple);text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px;display:flex;align-items:center;gap:4px}
+.sb-ai-t{color:rgba(255,255,255,.8);font-size:12px;font-weight:500}
+.ai-dot{width:4px;height:4px;border-radius:50%;background:var(--purple);animation:pulse 2s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(124,58,237,.4)}50%{opacity:.6;box-shadow:0 0 0 4px rgba(124,58,237,0)}}
+.sb-foot{padding:8px;border-top:1px solid var(--sb-border)}
+.theme-row{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
+.theme-lbl{font-size:10.5px;color:rgba(255,255,255,.38)}
+.theme-btns{display:flex;gap:2px}
+.th-btn{width:26px;height:22px;border-radius:5px;border:none;background:transparent;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all var(--fast);color:rgba(255,255,255,.35)}
+.th-btn.on{background:rgba(255,255,255,.1);color:#fff}
+
+/* ══ MAIN ══ */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+
+/* ══ TOPBAR ══ */
+.topbar{height:56px;background:var(--topbar);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 20px;flex-shrink:0;transition:background var(--base);box-shadow:0 1px 0 rgba(255,255,255,.015)}
+.tb-title{font-size:14px;font-weight:650;color:var(--text);flex:1;letter-spacing:-.2px}
+.tb-search{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:7px 12px;width:260px;transition:all var(--fast)}
+.tb-search:focus-within{border-color:var(--blue);background:var(--surface);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+.tb-search input{border:none;background:transparent;outline:none;font-size:12px;color:var(--text);width:100%;font-family:inherit;direction:rtl}
+.tb-search input::placeholder{color:var(--text3)}
+.tb-search svg{width:12px;height:12px;fill:none;stroke:var(--text3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.tb-actions{display:flex;align-items:center;gap:5px}
+.tb-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);transition:all var(--fast);position:relative}
+.tb-btn:hover{background:var(--surface3);color:var(--text)}
+.tb-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tb-notif::after{content:'';position:absolute;top:5px;left:5px;width:6px;height:6px;border-radius:50%;background:var(--orange);border:2px solid var(--surface2)}
+.tb-sync{display:flex;align-items:center;gap:4px;padding:0 10px;height:28px;border-radius:99px;border:1px solid var(--border);background:var(--surface2);font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;transition:all var(--fast);font-family:inherit}
+.tb-sync:hover{border-color:var(--blue);color:var(--blue)}
+.tb-sync svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ══ TICKER ══ */
+.ticker{height:30px;background:var(--ticker);display:flex;align-items:center;gap:10px;padding:0 18px;flex-shrink:0;overflow:hidden;border-bottom:1px solid rgba(124,58,237,.12);transition:background var(--base)}
+.ticker-badge{display:flex;align-items:center;gap:4px;color:var(--light-purple);font-size:9px;font-weight:700;letter-spacing:.7px;white-space:nowrap;text-transform:uppercase}
+.ticker-scroll{flex:1;overflow:hidden}
+.ticker-track{display:flex;gap:24px;animation:tkscr 60s linear infinite;white-space:nowrap}
+.ticker-track:hover{animation-play-state:paused}
+@keyframes tkscr{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.tki{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:rgba(255,255,255,.5)}
+[data-theme="light"] .tki{color:rgba(255,255,255,.65)}
+.tks{width:2px;height:2px;border-radius:50%;background:rgba(255,255,255,.18);flex-shrink:0}
+
+/* ══ CONTENT ══ */
+.content{flex:1;overflow-y:auto;padding:18px 20px 30px}
+
+/* ══ PAGES ══ */
+.page{display:none}
+.page.active{display:block;animation:pgIn var(--base) var(--ease)}
+@keyframes pgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ══ BREADCRUMB ══ */
+.breadcrumb{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);margin-bottom:12px}
+.breadcrumb a{color:var(--blue);cursor:pointer;text-decoration:none}
+.breadcrumb a:hover{text-decoration:underline}
+.breadcrumb span{color:var(--text3)}
+
+/* ══ HERO ══ */
+
+/* ══ KPI GRID ══ */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:12px;direction:rtl}
+.kpi{
+  --kpi-accent:var(--blue);
+  appearance:none;width:100%;font-family:inherit;color:var(--text);text-align:right;direction:rtl;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;padding:14px 15px;min-height:142px;
+  position:relative;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;
+  box-shadow:0 10px 26px rgba(3,5,28,.16),inset 0 1px 0 rgba(255,255,255,.025);
+  transition:transform var(--fast) var(--ease),box-shadow var(--fast),border-color var(--fast);
+}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(3,5,28,.24),inset 0 1px 0 rgba(255,255,255,.035);border-color:var(--border2)}
+.kpi:focus-visible{outline:2px solid var(--kpi-accent);outline-offset:2px}
+.kpi-top{position:absolute;top:0;right:16px;width:38px;height:2px;border-radius:0 0 99px 99px;background:var(--kpi-accent);box-shadow:0 0 11px color-mix(in srgb,var(--kpi-accent) 55%,transparent)}
+.kpi-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;min-width:0}
+.kpi-ic{width:27px;height:27px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--kpi-accent) 11%,transparent);border:1px solid color-mix(in srgb,var(--kpi-accent) 25%,transparent);color:var(--kpi-accent);flex-shrink:0}
+.kpi-ic svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.kpi-lbl{font-size:10.5px;font-weight:600;color:var(--text2);letter-spacing:.05px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi-val{font-family:'IBM Plex Sans Arabic',sans-serif;font-size:24px;font-weight:760;letter-spacing:-.55px;line-height:1.15;color:var(--text);white-space:nowrap;font-variant-numeric:tabular-nums}
+.kpi-subtitle{margin-top:auto;padding-top:11px;font-size:9.5px;line-height:1.55;color:var(--text3)}
+.kpi-subtitle strong{display:block;color:var(--text2);font-size:11px;font-weight:700;line-height:1.45;font-variant-numeric:tabular-nums}
+
+/* ══ OVERVIEW LAYOUT ══ */
+.overview-primary{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,.85fr);gap:10px;margin-bottom:10px;align-items:stretch}
+.overview-side{display:grid;grid-template-rows:1fr 1fr;gap:10px;min-width:0}
+.overview-secondary{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:10px;margin-bottom:10px;align-items:stretch}
+.overview-risk{grid-column:1/-1}
+.overview-card{height:100%;box-shadow:0 8px 22px rgba(0,0,0,.1)}
+.overview-featured{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--surface2) 88%,var(--blue) 12%));border-color:rgba(37,99,235,.14)}
+.card-kicker{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;color:var(--purple);letter-spacing:.7px;text-transform:uppercase;margin-bottom:2px}
+.card-kicker::before{content:'';width:13px;height:2px;border-radius:99px;background:linear-gradient(90deg,var(--purple),var(--blue))}
+
+/* ══ SECTION ══ */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.g21{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px}
+.g12{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;transition:background var(--base),border-color var(--base),box-shadow var(--base)}
+.card:hover{border-color:var(--border2)}
+.card-h{padding:14px 15px 0;display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:650;color:var(--text);letter-spacing:-.12px}
+.card-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.card-b{padding:10px 15px 14px}
+.chart-h{width:100%;position:relative}
+
+/* ══ STATUS BARS ══ */
+.st-list{display:flex;flex-direction:column;gap:7px}
+.st-row{padding:7px 8px;border:1px solid var(--border);border-radius:10px;background:var(--surface2)}
+.st-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.st-lbl{font-size:11.5px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
+.st-dot{width:7px;height:7px;border-radius:50%;box-shadow:0 0 8px currentColor}
+.st-metrics{display:flex;align-items:baseline;gap:7px;direction:ltr}
+.st-track{height:5px;background:var(--surface3);border-radius:99px;overflow:hidden}
+.st-fill{height:100%;border-radius:99px;transition:width .6s var(--ease)}
+.st-num{font-size:14px;font-weight:700;color:var(--text)}
+.st-pct{font-size:10px;color:var(--text3)}
+
+/* ══ EXPIRY ══ */
+.exp-list{display:flex;flex-direction:column;gap:5px}
+.exp-row{padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;transition:all var(--fast)}
+.exp-row:hover{border-color:var(--border2);background:var(--surface3)}
+.exp-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.exp-name{font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin-left:8px}
+.exp-days{font-size:11px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.exp-track{height:4px;background:var(--surface3);border-radius:99px;overflow:hidden}
+.exp-fill{height:100%;border-radius:99px}
+.urg-c{color:var(--red)}.urg-o{color:var(--orange)}.urg-a{color:var(--amber)}.urg-g{color:var(--green)}
+
+/* ══ RISK MATRIX ══ */
+.rm{width:100%;height:285px;position:relative}
+
+/* ══ TABLE ══ */
+.tbl-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:12px;box-shadow:0 8px 22px rgba(0,0,0,.08)}
+.tbl-toolbar{padding:11px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:linear-gradient(180deg,var(--surface2),var(--surface))}
+.tq{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:99px;padding:5px 10px;transition:border-color var(--fast)}
+.tq:focus-within{border-color:var(--blue)}
+.tq input{border:none;background:transparent;outline:none;font-size:11.5px;color:var(--text);font-family:inherit;direction:rtl;width:145px}
+.tq svg{width:11px;height:11px;fill:none;stroke:var(--text3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{padding:3px 9px;border-radius:99px;border:1px solid var(--border);font-size:10.5px;cursor:pointer;transition:all var(--fast);color:var(--text2);background:transparent}
+.chip:hover{border-color:var(--blue);color:var(--blue)}
+.chip.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl thead th{background:var(--surface2);padding:9px 10px;text-align:right;font-weight:600;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.35px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl tbody tr{border-bottom:1px solid var(--border);transition:background var(--fast);cursor:pointer}
+.tbl tbody tr:last-child{border-bottom:none}
+.tbl tbody tr:hover{background:var(--surface2)}
+.tbl td{padding:9px 10px;vertical-align:middle}
+.pbar{height:4px;background:var(--surface3);border-radius:99px;overflow:hidden;min-width:50px}
+.pfill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--purple))}
+.badge{display:inline-flex;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:500;white-space:nowrap}
+.bb{background:var(--blue-dim);color:var(--light-blue)}
+.bg{background:var(--green-dim);color:var(--green)}
+.ba{background:var(--amber-dim);color:var(--light-orange,#E8AB78)}
+.br{background:var(--red-dim);color:var(--red)}
+.bgr{background:var(--surface3);color:var(--text2)}
+.bp{background:var(--purple-dim);color:var(--light-purple)}
+.num{font-variant-numeric:tabular-nums;font-size:11.5px}
+.neg{color:var(--red);font-weight:500}.pos{color:var(--green);font-weight:500}
+.mlA{margin-right:auto}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:99px;border:1px solid var(--border);background:var(--surface2);font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;transition:all var(--fast);font-family:inherit}
+.btn:hover{border-color:var(--border2);color:var(--text)}
+.btn svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sec-title{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.2px;margin-bottom:12px}
+
+/* ══ PROJECT DETAILS ══ */
+.det-header{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;margin-bottom:10px}
+.det-name-ar{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-.3px;margin-bottom:4px}
+.det-name-en{font-size:13px;color:var(--text2);margin-bottom:10px}
+.det-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.det-meta-item{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text2)}
+.det-meta-item svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.det-progress-wrap{background:var(--surface3);border-radius:99px;height:6px;overflow:hidden;margin-top:8px}
+.det-progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--purple));transition:width .8s var(--ease)}
+.det-sections{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.det-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+.det-sec-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.det-sec-title svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.det-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)}
+.det-row:last-child{border-bottom:none}
+.det-key{font-size:11.5px;color:var(--text2)}
+.det-val{font-size:12px;font-weight:500;color:var(--text);text-align:left}
+.det-val.pos{color:var(--green)}.det-val.neg{color:var(--red)}.det-val.warn{color:var(--amber)}
+
+/* ══ TIMELINE PAGE ══ */
+.tl-row{display:grid;grid-template-columns:145px 1fr 66px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.tl-row:last-child{border-bottom:none}
+.tl-nm{font-family:inherit;border:0;background:transparent;text-align:right;font-size:11.5px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.tl-nm:hover{color:var(--blue)}
+.tl-bar{height:15px;background:var(--surface3);border-radius:4px;position:relative;overflow:hidden}
+.tl-done{position:absolute;top:0;height:100%;background:linear-gradient(90deg,var(--blue),var(--purple));border-radius:4px}
+.tl-rem{position:absolute;top:0;height:100%;background:rgba(6,182,212,.15);border-radius:4px}
+.tl-now{position:absolute;top:0;bottom:0;width:2px;background:var(--orange);z-index:2}
+.tl-d{font-size:10.5px;color:var(--text2);text-align:center}
+
+.losing-row{width:100%;display:flex;align-items:center;justify-content:space-between;padding:8px 1px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;font-size:12px;text-align:right;cursor:pointer}
+.losing-row:hover{color:var(--blue)}
+.losing-row strong{font-size:12px;font-weight:650}
+
+/* ══ COPILOT ══ */
+.cop-fab{position:fixed;bottom:18px;left:18px;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--blue));border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:200;box-shadow:0 3px 16px rgba(124,58,237,.4);transition:transform var(--base) var(--ease),box-shadow var(--base)}
+.cop-fab:hover{transform:scale(1.08);box-shadow:0 5px 24px rgba(124,58,237,.55)}
+.cop-fab svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cop-ovl{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);z-index:149;opacity:0;pointer-events:none;transition:opacity var(--base)}
+.cop-ovl.show{opacity:1;pointer-events:all}
+.cop-panel{position:fixed;top:0;left:0;bottom:0;width:380px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:150;transform:translateX(-100%);transition:transform var(--slow) var(--ease);box-shadow:var(--shadow-lg)}
+.cop-panel.open{transform:translateX(0)}
+.cop-head{background:var(--sb);padding:13px 15px;display:flex;align-items:center;gap:9px;flex-shrink:0}
+.cop-logo{height:18px;filter:brightness(0) invert(1);object-fit:contain}
+.cop-vd{width:1px;height:14px;background:rgba(255,255,255,.1);flex-shrink:0}
+.cop-ht{color:#fff;font-weight:600;font-size:12.5px}
+.cop-hs{color:rgba(255,255,255,.35);font-size:10px;margin-top:.5px}
+.cop-close{margin-right:auto;background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;transition:all var(--fast)}
+.cop-close:hover{color:#fff;background:rgba(255,255,255,.08)}
+.cop-close svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cop-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.bubble{max-width:92%;padding:8px 12px;border-radius:11px;font-size:12.5px;line-height:1.55;white-space:pre-wrap}
+.bu{background:linear-gradient(135deg,var(--purple),var(--blue));color:#fff;align-self:flex-start;border-radius:11px 3px 11px 11px}
+.bai{background:var(--surface2);color:var(--text);align-self:flex-end;border-radius:3px 11px 11px 11px;border:1px solid var(--border)}
+.btype{font-size:9px;font-weight:700;color:var(--purple);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+.thinking{display:flex;gap:4px;padding:9px 12px;background:var(--surface2);border-radius:3px 11px 11px 11px;align-self:flex-end;border:1px solid var(--border)}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--purple);animation:bop 1.2s infinite}
+.dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+@keyframes bop{0%,80%,100%{transform:translateY(0);opacity:.35}40%{transform:translateY(-5px);opacity:1}}
+.cop-sugg{padding:6px 12px 8px;display:flex;flex-direction:column;gap:3px}
+.sugg-lbl{font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px}
+.sugg{padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);font-size:11.5px;color:var(--text2);cursor:pointer;text-align:right;font-family:inherit;transition:all var(--fast)}
+.sugg:hover{border-color:var(--purple);color:var(--purple);background:var(--purple-dim)}
+.cop-ir{padding:9px 12px;border-top:1px solid var(--border);display:flex;gap:6px;flex-shrink:0}
+.cop-inp{flex:1;border:1px solid var(--border);border-radius:99px;padding:7px 12px;font-size:12px;font-family:inherit;outline:none;direction:rtl;background:var(--surface2);color:var(--text);transition:border-color var(--fast)}
+.cop-inp:focus{border-color:var(--purple);background:var(--surface)}
+.cop-send{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--blue));border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity var(--fast)}
+.cop-send:hover{opacity:.88}.cop-send:disabled{opacity:.4;cursor:not-allowed}
+.cop-send svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ══ DATA QUALITY ══ */
+.dq-item{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface2)}
+.dq-ic{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.dq-ic svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.dq-text{font-size:11.5px;color:var(--text);line-height:1.5}
+.dq-count{font-size:10px;color:var(--text2);margin-top:1px}
+
+/* ══ FINPAGE ══ */
+.fin-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:12px;direction:rtl}
+[data-theme="light"] .kpi{box-shadow:0 8px 22px rgba(27,42,74,.07),inset 0 1px 0 rgba(255,255,255,.85)}
+[data-theme="light"] .overview-card,[data-theme="light"] .tbl-card{box-shadow:0 8px 24px rgba(27,42,74,.07)}
+[data-theme="light"] .overview-featured{background:linear-gradient(145deg,#FFFFFF,#F7F5FC);border-color:rgba(111,74,203,.13)}
+[data-theme="light"] .card-kicker{color:#6F4ACB}
+[data-theme="light"] .topbar{box-shadow:0 4px 18px rgba(27,42,74,.05)}
+
+/* ══ REFERENCE-INSPIRED EXECUTIVE THEME ══
+   Compact navy analytics canvas with cyan/mint signal accents. */
+[data-theme="dark"]{
+  --bg:#111827;--bg2:#151D2B;--surface:#1A2233;--surface2:#202A3D;
+  --surface3:#28344A;--border:rgba(174,143,213,.10);--border2:rgba(174,143,213,.22);
+  --text:#F4F6FA;--text2:#A4ADBC;--text3:#667085;
+  --sb:#12183D;--sb-border:rgba(174,143,213,.10);
+  --topbar:rgba(17,24,39,.94);--ticker:#151D31;
+  --shadow:0 12px 34px rgba(0,0,0,.3);--shadow-lg:0 24px 68px rgba(0,0,0,.5);
+}
+[data-theme="dark"] body{background:radial-gradient(circle at 78% -12%,rgba(111,74,203,.13),transparent 34%),radial-gradient(circle at 12% 112%,rgba(76,120,201,.08),transparent 30%),linear-gradient(150deg,#101726 0%,#141C2A 58%,#111827 100%)}
+[data-theme="dark"] .sb{background:linear-gradient(180deg,#1B245C 0%,#171E49 58%,#12183D 100%)}
+[data-theme="dark"] .sb::before{height:190px;background:radial-gradient(circle at 74% 0,rgba(174,143,213,.20),transparent 68%)}
+[data-theme="dark"] .ni.on{background:linear-gradient(135deg,rgba(111,74,203,.24),rgba(76,120,201,.12));border-color:rgba(174,143,213,.18)}
+[data-theme="dark"] .ni.on::after{background:linear-gradient(180deg,#AE8FD5,#6EA4D8);box-shadow:0 0 12px rgba(174,143,213,.32)}
+.topbar{height:50px}
+.content{padding:14px 17px 28px}
+[data-theme="dark"] .kpi{background:var(--surface);border-color:var(--border)}
+[data-theme="dark"] .card,[data-theme="dark"] .tbl-card{background:linear-gradient(155deg,var(--surface),color-mix(in srgb,var(--surface2) 96%,#6F4ACB 4%));box-shadow:0 10px 28px rgba(0,0,0,.17)}
+[data-theme="dark"] .overview-featured{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--surface2) 93%,#6F4ACB 7%));border-color:rgba(174,143,213,.15)}
+[data-theme="dark"] .card-kicker{color:var(--light-purple)}
+[data-theme="dark"] .card-kicker::before{background:linear-gradient(90deg,#6F4ACB,#6EA4D8)}
+
+@media(max-width:1250px){
+  .overview-secondary{grid-template-columns:1fr 1fr}.overview-secondary>article:last-child{grid-column:1/-1}
+}
+@media(max-width:1100px){
+  .kpi-grid,.fin-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:980px){
+  :root{--sidebar-w:204px}.content{padding:14px}
+  .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .fin-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .overview-primary{grid-template-columns:1fr}.overview-side{grid-template-columns:1fr 1fr;grid-template-rows:auto}
+}
+@media(max-width:720px){
+  :root{--sidebar-w:76px}.sb-brand-t,.sb-brand-s,.sb-lbl,.ni:not(.on){font-size:0}.sb-vd,.sb-ai,.theme-lbl,.sb-context{display:none}.sb-logo{height:26px}.sb-logo-row{justify-content:center}.ni{justify-content:center;padding:10px}.ni svg{width:17px;height:17px}.ni.on{font-size:0}
+  .tb-search{width:180px}
+  .kpi-grid,.fin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-side,.overview-secondary{grid-template-columns:1fr}.overview-secondary>article:last-child{grid-column:auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══ SIDEBAR ══ -->
+<aside class="sb">
+  <div class="sb-brand">
+    <div class="sb-logo-row">
+      <img src="/static/elm-logo.png" class="sb-logo" alt="Elm"/>
+      <div class="sb-vd"></div>
+      <div><div class="sb-brand-t">ذكاء المشاريع</div><div class="sb-brand-s">منصة المحفظة التنفيذية</div></div>
+    </div>
+    <div class="sb-context"><span class="sb-context-mark"></span><div><div class="sb-context-title">مركز قيادة محفظة Elm</div><div class="sb-context-sub">ذكاء مباشر للمحفظة</div></div></div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-sec">
+      <div class="sb-lbl">نظرة عامة</div>
+      <div class="ni on" data-page="overview" onclick="go('overview',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>لوحة القيادة</div>
+    </div>
+    <div class="sb-sec">
+      <div class="sb-lbl">المشاريع</div>
+      <div class="ni" data-page="projects" onclick="go('projects',this)"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>جميع المشاريع</div>
+      <div class="ni" data-page="timeline" onclick="go('timeline',this)"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h12"/><circle cx="19" cy="18" r="2"/></svg>الجدول الزمني</div>
+    </div>
+    <div class="sb-sec">
+      <div class="sb-lbl">التحليل</div>
+      <div class="ni" data-page="financials" onclick="go('financials',this)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l5 3"/></svg>التحليل المالي</div>
+      <div class="ni" data-page="quality" onclick="go('quality',this)"><svg viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>جودة البيانات</div>
+    </div>
+    <div class="sb-ai" onclick="openCop()">
+      <div class="sb-ai-lbl"><div class="ai-dot"></div>مساعد AI</div>
+      <div class="sb-ai-t">اسألني عن أي مشروع ←</div>
+    </div>
+  </nav>
+  <div class="sb-foot">
+    <div class="theme-row">
+      <span class="theme-lbl">السمة</span>
+      <div class="theme-btns">
+        <button class="th-btn" onclick="setTheme('light')" id="thL">☀️</button>
+        <button class="th-btn on" onclick="setTheme('dark')" id="thD">🌙</button>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+  <div class="topbar">
+    <div class="tb-title" id="pgTitle">لوحة القيادة التنفيذية</div>
+    <div class="tb-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg><input placeholder="ابحث في المشاريع..." id="globalSearch" oninput="globalFilter()"/></div>
+    <div class="tb-actions">
+      <div class="tb-btn tb-notif"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+      <button class="tb-sync" onclick="syncData()"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-9 9m0-18a9 9 0 0 1 9 9M3 12a9 9 0 0 0 9 9m0-18a9 9 0 0 0-9 9"/><path d="m15 9 3-3-3-3M9 15l-3 3 3 3"/></svg>تحديث</button>
+    </div>
+  </div>
+
+  <div class="ticker">
+    <div class="ticker-badge"><div class="ai-dot" style="width:3px;height:3px;background:#D9724E"></div>تنبيهات</div>
+    <div class="ticker-scroll">
+      <div class="ticker-track" id="tkTrk">
+        <span class="tki"><span class="tks"></span><span id="tk1">جاري تحميل التنبيهات...</span></span>
+        <span class="tki"><span class="tks"></span><span id="tk2"></span></span>
+        <span class="tki"><span class="tks"></span><span id="tk3"></span></span>
+        <span class="tki"><span class="tks"></span><span id="tk4"></span></span>
+        <span class="tki"><span class="tks"></span><span id="tk5"></span></span>
+        <span class="tki"><span class="tks"></span><span class="tkd1"></span></span>
+        <span class="tki"><span class="tks"></span><span class="tkd2"></span></span>
+        <span class="tki"><span class="tks"></span><span class="tkd3"></span></span>
+        <span class="tki"><span class="tks"></span><span class="tkd4"></span></span>
+        <span class="tki"><span class="tks"></span><span class="tkd5"></span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══ OVERVIEW PAGE ══ -->
+    <div class="page active" id="page-overview">
+      <section class="kpi-grid" id="kpiGrid" aria-label="مؤشرات الأداء الرئيسية"></section>
+
+      <section class="overview-primary">
+        <article class="card overview-card overview-featured">
+          <div class="card-h"><div><div class="card-kicker">الأداء المالي للمحفظة</div><div class="card-title">نبض المحفظة المالي</div><div class="card-sub">مقارنة الإيرادات والتكاليف وصافي الربح لأعلى المشاريع</div></div></div>
+          <div class="card-b"><div class="chart-h" style="height:250px" id="rcpWrap"></div></div>
+        </article>
+        <div class="overview-side">
+          <article class="card overview-card">
+            <div class="card-h"><div><div class="card-kicker">توزيع المحفظة</div><div class="card-title">حالة تنفيذ المشاريع</div><div class="card-sub">التوزيع الفعلي حسب حالة المشروع</div></div></div>
+            <div class="card-b" id="statusBars"></div>
+          </article>
+          <article class="card overview-card">
+            <div class="card-h"><div><div class="card-kicker">متابعة العقود</div><div class="card-title">العقود الأقرب للانتهاء</div><div class="card-sub">أولوية المتابعة خلال الفترة القادمة</div></div></div>
+            <div class="card-b" id="expiryList"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="overview-secondary">
+        <article class="card overview-card">
+          <div class="card-h"><div><div class="card-kicker">الجسر المالي</div><div class="card-title">الشلال المالي للمحفظة</div><div class="card-sub">من قيمة العقود إلى الإيرادات والتكلفة والربح وBacklog</div></div></div>
+          <div class="card-b"><div class="chart-h" style="height:235px" id="waterfallWrap"></div></div>
+        </article>
+        <article class="card overview-card">
+          <div class="card-h"><div><div class="card-kicker">مسار الإيرادات</div><div class="card-title">أعلى مشاريع Backlog</div><div class="card-sub">أكبر فرص الإيرادات المتبقية</div></div></div>
+          <div class="card-b"><div class="chart-h" style="height:215px" id="blWrap"></div></div>
+        </article>
+        <article class="card overview-card overview-risk">
+          <div class="card-h"><div><div class="card-kicker">رصد المخاطر</div><div class="card-title">مصفوفة المخاطر</div><div class="card-sub">الاحتمالية × الأثر لكل مشروع — انقر على أي نقطة للتفاصيل</div></div></div>
+          <div class="card-b"><div class="rm" id="riskMatrix"></div></div>
+        </article>
+      </section>
+
+      <!-- Projects table preview -->
+      <div class="tbl-card overview-table">
+        <div class="tbl-toolbar">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">المشاريع</span>
+          <div class="tq"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg><input id="tQ" placeholder="بحث..." oninput="fTbl()"/></div>
+          <div class="chips" id="statusChips">
+            <div class="chip on" onclick="fSt(this,'all')">الكل</div>
+            <div class="chip" onclick="fSt(this,'Ongoing')">جاري</div>
+            <div class="chip" onclick="fSt(this,'Completed')">مكتمل</div>
+            <div class="chip" onclick="fSt(this,'Closed')">مغلق</div>
+            <div class="chip" onclick="fSt(this,'On Hold')">متوقف</div>
+            <div class="chip" onclick="fSt(this,'Pipeline')">قيد الإعداد</div>
+          </div>
+          <button class="btn mlA" onclick="go('projects',null)"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>عرض الكل</button>
+        </div>
+        <div style="overflow-x:auto"><table class="tbl"><thead><tr>
+          <th>اسم المشروع</th><th>الحالة</th><th>التقدم</th>
+          <th>قيمة العقد</th><th>الإيرادات</th><th>Backlog</th>
+          <th>صافي الربح</th><th>الربح %</th><th>المتبقي</th>
+        </tr></thead><tbody id="tBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ══ PROJECTS PAGE ══ -->
+    <div class="page" id="page-projects">
+      <div class="breadcrumb"><a onclick="go('overview',null)">الرئيسية</a><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg><span>المشاريع</span></div>
+      <div class="tbl-card">
+        <div class="tbl-toolbar">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">جميع المشاريع</span>
+          <div class="tq"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg><input id="pQ" placeholder="بحث..." oninput="fPrj()"/></div>
+          <div class="chips">
+            <div class="chip on" onclick="fPSt(this,'all')">الكل</div>
+            <div class="chip" onclick="fPSt(this,'Ongoing')">جاري</div>
+            <div class="chip" onclick="fPSt(this,'Completed')">مكتمل</div>
+            <div class="chip" onclick="fPSt(this,'Closed')">مغلق</div>
+            <div class="chip" onclick="fPSt(this,'On Hold')">متوقف</div>
+            <div class="chip" onclick="fPSt(this,'Pipeline')">قيد الإعداد</div>
+          </div>
+          <div class="chips" style="margin-right:4px">
+            <div class="chip" onclick="fProfit(this,'all')">الكل</div>
+            <div class="chip" onclick="fProfit(this,'pos')">رابح</div>
+            <div class="chip" onclick="fProfit(this,'neg')">خاسر</div>
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="tbl" id="prjTable"><thead><tr>
+          <th>اسم المشروع</th><th>الكود</th><th>وحدة الأعمال</th><th>الحالة</th><th>التقدم</th>
+          <th>قيمة العقد</th><th>الإيرادات</th><th>Backlog</th>
+          <th>التكاليف</th><th>صافي الربح</th><th>الربح %</th><th>الانتهاء</th><th>المتبقي</th>
+        </tr></thead><tbody id="pBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ══ PROJECT DETAILS PAGE ══ -->
+    <div class="page" id="page-detail">
+      <div class="breadcrumb"><a onclick="go('overview',null)">الرئيسية</a><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg><a onclick="go('projects',null)">المشاريع</a><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg><span id="detBread">—</span></div>
+      <div id="detContent"></div>
+    </div>
+
+    <!-- ══ TIMELINE PAGE ══ -->
+    <div class="page" id="page-timeline">
+      <div class="breadcrumb"><a onclick="go('overview',null)">الرئيسية</a><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg><span>الجدول الزمني</span></div>
+      <div class="card">
+        <div class="card-h" style="margin-bottom:8px"><div><div class="card-title">الجدول الزمني للمشاريع</div><div class="card-sub">التقدم والمدة المتبقية</div></div></div>
+        <div class="card-b" style="max-height:580px;overflow-y:auto" id="tlCont"></div>
+      </div>
+    </div>
+
+    <!-- ══ FINANCIALS PAGE ══ -->
+    <div class="page" id="page-financials">
+      <div class="breadcrumb"><a onclick="go('overview',null)">الرئيسية</a><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg><span>التحليل المالي</span></div>
+      <div class="fin-grid" id="finGrid"></div>
+      <div class="g2">
+        <div class="card"><div class="card-h" style="margin-bottom:8px"><div class="card-title">توزيع الربحية</div></div><div class="card-b"><div class="chart-h" style="height:175px" id="prWrap"></div></div></div>
+        <div class="card"><div class="card-h" style="margin-bottom:8px"><div class="card-title">المشاريع الخاسرة</div></div>
+          <div class="card-b" id="losingList" style="max-height:200px;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DATA QUALITY PAGE ══ -->
+    <div class="page" id="page-quality">
+      <div class="breadcrumb"><a onclick="go('overview',null)">الرئيسية</a><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg><span>جودة البيانات</span></div>
+      <div id="dqList"></div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- Copilot -->
+<div class="cop-ovl" id="copOvl" onclick="closeCop()"></div>
+<div class="cop-panel" id="copPanel">
+  <div class="cop-head">
+    <img src="/static/elm-logo.png" class="cop-logo" alt="Elm"/>
+    <div class="cop-vd"></div>
+    <div><div class="cop-ht">مساعد AI</div><div class="cop-hs">مساعدك الذكي التنفيذي</div></div>
+    <button class="cop-close" onclick="closeCop()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="cop-msgs" id="copMsgs">
+    <div class="bubble bai">مرحباً! اسألني عن أي مشروع، عقد، أو تحليل مالي في المحفظة.</div>
+  </div>
+  <div class="cop-sugg" id="copSugg">
+    <div class="sugg-lbl">اقتراحات</div>
+    <button class="sugg" onclick="sendS(this)">أي المشاريع تنتهي خلال 30 يوماً؟</button>
+    <button class="sugg" onclick="sendS(this)">أعطني تقريرًا تنفيذيًا لنائب الرئيس</button>
+    <button class="sugg" onclick="sendS(this)">ما المشاريع الخاسرة؟</button>
+    <button class="sugg" onclick="sendS(this)">ما هو إجمالي Backlog القطاع؟</button>
+  </div>
+  <div class="cop-ir">
+    <input class="cop-inp" id="copIn" placeholder="اكتب سؤالك..."/>
+    <button class="cop-send" id="copSend" onclick="sendCop()"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+  </div>
+</div>
+<button class="cop-fab" onclick="toggleCop()"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26A7 7 0 0 1 12 2z"/><path d="M9 21h6"/></svg></button>
+
+<script>
+/* ══════════════════════════════════════
+   CORE
+══════════════════════════════════════ */
+const $=id=>document.getElementById(id);
+let DATA=[],METRICS={},curSt='all',curProfit='all',curPSt='all',eCharts={};
+
+// Status map Arabic
+const ST={Ongoing:'جاري',Completed:'مكتمل',Closed:'مغلق','On Hold':'متوقف','On-hold':'متوقف',Pipeline:'قيد الإعداد','':'غير محدد'};
+const ST_COLOR={Ongoing:'#4C78C9',Completed:'#3DA66D',Closed:'#7B8496','On Hold':'#D9724E','On-hold':'#D9724E',Pipeline:'#6F4ACB','':'#7B8496'};
+const stAr=s=>ST[s]||ST[s?.replace('-',' ')]||s||'غير محدد';
+const stColor=s=>ST_COLOR[s]||ST_COLOR[s?.replace('-',' ')]||'#6B7280';
+const stBadge=s=>{const a=stAr(s);const m={جاري:'bb',مكتمل:'bg',مغلق:'bgr',متوقف:'ba','قيد الإعداد':'bp','غير محدد':'bgr'};return`<span class="badge ${m[a]||'bgr'}">${a}</span>`}
+
+// Formatters
+const fmtN=n=>!n&&n!==0?'—':Math.abs(n)>=1e9?(n/1e9).toFixed(1)+' مليار':Math.abs(n)>=1e6?(n/1e6).toFixed(1)+' مليون':Math.abs(n)>=1e3?(n/1e3).toFixed(0)+' ألف':Math.round(n).toLocaleString('ar-SA');
+const fmtC=n=>n==null?'—':Math.round(n).toLocaleString();
+const fmtPct=(n,r=1)=>n==null||isNaN(n)?'—':n.toFixed(r)+'%';
+const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
+const escAttr=value=>String(value??'').replace(/[&"'<>]/g,ch=>({'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'}[ch]));
+const projectName=p=>p?.project_name_ar||p?.project_code||'مشروع غير مسمى';
+const isDark=()=>document.documentElement.getAttribute('data-theme')==='dark';
+const gc=()=>isDark()?{text:'#7B8299',text2:'#454D63',grid:'rgba(255,255,255,.04)'}:{text:'#4B5563',text2:'#9CA3AF',grid:'rgba(0,0,0,.05)'};
+const ELM={revenue:'#4C78C9',cost:'#D9724E',profit:'#6F4ACB',backlog:'#6EA4D8',risk:'#D95656',planned:'#94A3B8',warning:'#E8AB78',healthy:'#3DA66D'};
+const chartLegend=()=>({top:0,left:'center',textStyle:{color:gc().text,fontFamily:'IBM Plex Sans Arabic',fontSize:10},itemWidth:10,itemHeight:8,itemGap:14});
+const chartMotion={animationDuration:700,animationDurationUpdate:450,animationEasing:'cubicOut',animationEasingUpdate:'cubicOut'};
+const chartTip=formatter=>({trigger:'axis',backgroundColor:isDark()?'rgba(12,16,29,.96)':'rgba(255,255,255,.98)',borderColor:isDark()?'rgba(255,255,255,.12)':'rgba(27,42,74,.12)',borderWidth:1,textStyle:{color:isDark()?'#E8EAF0':'#111827',fontFamily:'IBM Plex Sans Arabic',fontSize:11},extraCssText:'box-shadow:0 14px 34px rgba(0,0,0,.22);border-radius:10px;padding:9px 11px',formatter});
+const chartItemTip=formatter=>({...chartTip(formatter),trigger:'item'});
+
+// Effective end date
+const effEnd=p=>{
+  return p.amended_end_date||p.end_date||null;
+};
+
+// Executive KPIs are calculated once on the server from canonical DB fields.
+function calcKPIs(){
+  return{
+    tot:METRICS.total_projects||0,
+    tCV:METRICS.total_contract_value||0,
+    tRev:METRICS.total_revenue||0,
+    tCost:METRICS.total_cost||0,
+    tNet:METRICS.net_profit||0,
+    tBL:METRICS.backlog||0,
+    pMargin:METRICS.profit_margin_pct||0,
+    act:METRICS.active_projects||0,
+    losing:METRICS.losing_projects||0,
+    exp30:METRICS.contracts_expiring_soon||0,
+  };
+}
+
+// Days remaining using effective end date
+function daysRem(p){
+  const e=effEnd(p);
+  if(!e)return null;
+  return Math.round((new Date(e)-new Date())/864e5);
+}
+
+function dL(d){
+  if(d===null||d===undefined)return'—';
+  if(d<0)return`<span style="color:${ELM.risk};font-size:10.5px">منتهي ${Math.abs(d)} يوم</span>`;
+  if(d===0)return`<span style="color:${ELM.cost};font-size:10.5px">ينتهي اليوم</span>`;
+  if(d<=30)return`<span style="color:${ELM.risk};font-size:10.5px;font-weight:600">${d} يوم ⚠</span>`;
+  if(d<=90)return`<span style="color:${ELM.warning};font-size:10.5px">${d} يوم</span>`;
+  return`<span style="color:var(--text2);font-size:10.5px">${Math.round(d/30)} شهر</span>`;
+}
+function urgClr(d){if(d===null||d<0)return ELM.planned;if(d<=30)return ELM.risk;if(d<=60)return ELM.cost;if(d<=90)return ELM.warning;return ELM.healthy}
+
+function pSp(p){if(p<0)return`<span class="neg">${fmtPct(p)}</span>`;if(p<10)return`<span style="color:${ELM.warning};font-weight:500">${fmtPct(p)}</span>`;return`<span class="pos">${fmtPct(p)}</span>`}
+
+/* ══ THEME ══ */
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  document.documentElement.style.colorScheme=t;
+  try{localStorage.setItem('elm-theme',t)}catch{}
+  $('thL').classList.toggle('on',t==='light');
+  $('thD').classList.toggle('on',t==='dark');
+  setTimeout(()=>{renderCharts();renderFin();},250);
+}
+
+/* ══ DATA ══ */
+async function loadData(){
+  try{const r=await fetch('/api/projects',{cache:'no-store'});const j=await r.json();
+    METRICS=j.metrics||{};
+    DATA=(j.projects||[]).map(p=>({...p,_effEnd:effEnd(p),_daysRem:daysRem(p)}));
+    renderAll();}
+  catch(e){console.error(e);}
+}
+async function syncData(){try{await fetch('/sync',{method:'POST'});await loadData();}catch(e){console.error(e);}}
+
+/* ══ RENDER ALL ══ */
+function renderAll(){
+  renderKPIs();renderStatusBars();renderCharts();
+  renderExpiryList();renderRiskMatrix();
+  renderTbl(DATA);renderPrj();renderTL();renderFin();renderQuality();updateTicker();
+}
+
+/* ══ KPIs ══ */
+function renderKPIs(){
+  const k=calcKPIs(DATA);
+  const amendments=METRICS.amendments_total||0;
+  const currentRevenue=METRICS.current_year_revenue||0;
+  const currentCost=METRICS.current_year_cost||0;
+  const backlogShare=k.tCV?k.tBL/k.tCV*100:0;
+  const svgs={folder:`<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,money:`<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>`,receipt:`<path d="M4 2v20l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V2l-2 2-2-2-2 2-2-2-2 2-2-2-2 2Z"/><path d="M9 9h6M9 13h6M9 17h3"/>`,bar:`<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,cost:`<path d="M21 10H3M21 6H3M21 14H3M21 18H3"/>`,coin:`<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`,pct:`<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>`,clock:`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,alert:`<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`,briefcase:`<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2"/>`};
+  const kpis=[
+    {v:fmtN(k.tCV)+' ريال',l:'إجمالي قيمة العقود',ic:svgs.money,acc:'#AE8FD5',sub:`يشمل تعديلات عقود بقيمة<strong>${Math.round(amendments/1e6).toLocaleString('ar-SA')} مليون ريال</strong>`,filter:'all',page:'financials'},
+    {v:fmtN(k.tRev)+' ريال',l:'إجمالي الإيرادات',ic:svgs.receipt,acc:ELM.revenue,sub:`منها<strong>${fmtN(currentRevenue)} ريال</strong>إيرادات الفترة الحالية`,filter:'all',page:'financials'},
+    {v:fmtN(k.tCost)+' ريال',l:'إجمالي التكاليف',ic:svgs.cost,acc:ELM.cost,sub:`منها<strong>${fmtN(currentCost)} ريال</strong>تكاليف الفترة الحالية`,filter:'all',page:'financials'},
+    {v:fmtN(k.tBL)+' ريال',l:'Backlog',ic:svgs.bar,acc:ELM.backlog,sub:`يمثل<strong>${backlogShare.toFixed(0)}%</strong>من إجمالي قيمة العقود`,filter:'all',page:'projects'},
+    {v:fmtN(k.tNet)+' ريال',l:'صافي الربح',ic:svgs.coin,acc:k.tNet>=0?ELM.profit:ELM.risk,sub:'الإيرادات مطروحًا منها<br>إجمالي التكاليف',filter:'all',page:'financials'},
+    {v:fmtPct(k.pMargin),l:'هامش الربح',ic:svgs.pct,acc:k.pMargin>=0?ELM.profit:ELM.risk,sub:'صافي الربح كنسبة من<br>إجمالي الإيرادات',filter:'all',page:'financials'},
+    {v:k.tot,l:'إجمالي المشاريع',ic:svgs.folder,acc:ELM.planned,sub:'عدد المشاريع<br>في المحفظة',filter:'all',page:'projects'},
+    {v:k.act,l:'المشاريع النشطة',ic:svgs.briefcase,acc:ELM.revenue,sub:'المشاريع ذات الحالة<br>«جاري»',filter:'Ongoing',page:'projects'},
+    {v:k.losing,l:'المشاريع الخاسرة',ic:svgs.alert,acc:ELM.risk,sub:'مشاريع تجاوزت<br>تكلفتها إجمالي إيراداتها',filter:'neg',page:'projects'},
+    {v:k.exp30,l:'العقود المنتهية قريبًا',ic:svgs.clock,acc:ELM.cost,sub:'تنتهي خلال<strong>30 يومًا</strong>',filter:'all',page:'timeline'},
+  ];
+  $('kpiGrid').innerHTML=kpis.map(k2=>`
+    <button type="button" class="kpi" style="--kpi-accent:${k2.acc}" onclick="kpiClick('${k2.page}','${k2.filter}')" aria-label="${k2.l}: ${k2.v}">
+      <div class="kpi-top"></div>
+      <div class="kpi-head">
+        <div class="kpi-ic"><svg viewBox="0 0 24 24">${k2.ic}</svg></div>
+        <div class="kpi-lbl">${k2.l}</div>
+      </div>
+      <div class="kpi-val">${k2.v}</div>
+      <div class="kpi-subtitle">${k2.sub}</div>
+    </button>`).join('');
+}
+
+function kpiClick(page,filter){
+  if(page==='projects'){
+    curPSt=filter==='neg'?'all':filter;curProfit=filter==='neg'?'neg':'all';
+    renderPrj();go('projects',null);
+  } else go(page,null);
+}
+
+/* ══ STATUS BARS ══ */
+function renderStatusBars(){
+  const p=DATA,tot=p.length||1;
+  const groups=[
+    {k:'Ongoing',   c:ELM.revenue},
+    {k:'Completed', c:ELM.healthy},
+    {k:'Closed',    c:'#7B8496'},
+    {k:'On Hold',   c:ELM.cost},
+    {k:'Pipeline',  c:ELM.profit},
+  ];
+  $('statusBars').innerHTML=`<div class="st-list">${groups.map(g=>{
+    const cnt=p.filter(x=>x.status===g.k||(g.k==='On Hold'&&x.status==='On-hold')).length;
+    if(!cnt)return'';
+    const pct=Math.round(cnt/tot*100);
+    return`<div class="st-row">
+      <div class="st-head"><div class="st-lbl"><span class="st-dot" style="color:${g.c};background:${g.c}"></span>${stAr(g.k)}</div><div class="st-metrics"><span class="st-num">${cnt}</span><span class="st-pct">${pct}%</span></div></div>
+      <div class="st-track"><div class="st-fill" style="width:${pct}%;background:${g.c}"></div></div>
+    </div>`;
+  }).join('')}
+  <div style="height:8px;border-radius:99px;overflow:hidden;display:flex;gap:1px;margin-top:10px">
+    ${groups.map(g=>{const cnt=p.filter(x=>x.status===g.k||(g.k==='On Hold'&&x.status==='On-hold')).length;const w=Math.round(cnt/tot*100);return w?`<div style="width:${w}%;background:${g.c}"></div>`:''}).join('')}
+  </div></div>`;
+}
+
+/* ══ ECHARTS ══ */
+function initEC(id,h){
+  const el=$(id);if(!el)return null;
+  el.style.height=h||'165px';el.style.width='100%';
+  if(eCharts[id])eCharts[id].dispose();
+  eCharts[id]=echarts.init(el,null,{renderer:'canvas'});
+  return eCharts[id];
+}
+function bindChartDetails(chart,projects){
+  if(!chart)return;
+  chart.off('click');
+  chart.on('click',event=>{
+    const project=projects[event.dataIndex];
+    if(project?.project_code)openDetail(project.project_code);
+  });
+}
+
+function renderCharts(){
+  const p=DATA,c=gc();
+
+  /* Grouped portfolio financial bars */
+  const t8=[...p].sort((a,b)=>(b.total_revenue||0)-(a.total_revenue||0)).slice(0,8);
+  const ec1=initEC('rcpWrap','250px');
+  if(ec1)ec1.setOption({backgroundColor:'transparent',...chartMotion,
+    tooltip:chartTip(ps=>{const project=t8[ps[0]?.dataIndex];return`<div style="min-width:190px"><b style="font-size:12px">${projectName(project)}</b><div style="color:${c.text};margin:3px 0 6px">${project?.project_code||''}</div><div>الإيرادات <b style="color:${ELM.revenue};float:left">${fmtN(project?.total_revenue)} ريال</b></div><div>التكاليف <b style="color:${ELM.cost};float:left">${fmtN(project?.total_cost)} ريال</b></div><div>صافي الربح <b style="color:${ELM.profit};float:left">${fmtN(project?.net_profit)} ريال</b></div><div>هامش الربح <b style="color:${ELM.profit};float:left">${fmtPct(project?.profit_pct||0)}</b></div></div>`}),
+    legend:chartLegend(),
+    grid:{top:36,bottom:52,left:8,right:12,containLabel:true},
+    xAxis:{type:'category',data:t8.map(projectName),axisLabel:{color:c.text,fontSize:9,rotate:18,width:72,overflow:'truncate'},axisLine:{lineStyle:{color:c.grid}},axisTick:{show:false}},
+    yAxis:{type:'value',axisLabel:{color:c.text,fontSize:9,formatter:v=>fmtN(v)},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false}},
+    series:[
+      {name:'الإيرادات',type:'bar',data:t8.map(x=>x.total_revenue||0),itemStyle:{color:ELM.revenue,borderRadius:[4,4,0,0]},barMaxWidth:14},
+      {name:'التكاليف',type:'bar',data:t8.map(x=>x.total_cost||0),itemStyle:{color:ELM.cost,borderRadius:[4,4,0,0]},barMaxWidth:14},
+      {name:'صافي الربح',type:'bar',data:t8.map(x=>x.net_profit||0),itemStyle:{color:ELM.profit,borderRadius:[4,4,0,0]},barMaxWidth:14}
+    ]
+  });
+  bindChartDetails(ec1,t8);
+
+  /* Executive financial waterfall */
+  const k=calcKPIs();
+  const contract=k.tCV,revenue=k.tRev,cost=k.tCost,profit=k.tNet,backlog=k.tBL;
+  const waterfall=[
+    {name:'قيمة العقود',actual:contract,base:0,size:contract,color:'#AE8FD5'},
+    {name:'الإيرادات',actual:revenue,base:Math.min(contract,revenue),size:Math.abs(revenue-contract),color:ELM.revenue},
+    {name:'التكاليف',actual:cost,base:Math.min(profit,revenue),size:Math.abs(cost),color:ELM.cost},
+    {name:'صافي الربح',actual:profit,base:0,size:Math.abs(profit),color:ELM.profit},
+    {name:'Backlog',actual:backlog,base:0,size:backlog,color:ELM.backlog},
+  ];
+  const ec2=initEC('waterfallWrap','235px');
+  if(ec2)ec2.setOption({backgroundColor:'transparent',...chartMotion,
+    tooltip:{...chartTip(p=>{const d=waterfall[p[0]?.dataIndex];return`<b>${d.name}</b><br><span style="color:${d.color}">●</span> القيمة: <b>${fmtN(d.actual)} ريال</b>`}),trigger:'axis',axisPointer:{type:'shadow'}},
+    grid:{top:22,bottom:14,left:8,right:8,containLabel:true},
+    xAxis:{type:'category',data:waterfall.map(x=>x.name),axisLabel:{color:c.text,fontSize:10},axisLine:{lineStyle:{color:c.grid}},axisTick:{show:false}},
+    yAxis:{type:'value',axisLabel:{color:c.text,fontSize:9,formatter:v=>fmtN(v)},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false}},
+    series:[
+      {name:'القاعدة',type:'bar',stack:'waterfall',silent:true,data:waterfall.map(x=>x.base),itemStyle:{color:'transparent'},emphasis:{disabled:true}},
+      {name:'القيمة',type:'bar',stack:'waterfall',barMaxWidth:42,data:waterfall.map(x=>({value:x.size,actual:x.actual,itemStyle:{color:x.color,borderRadius:[5,5,2,2]}})),label:{show:true,position:'top',formatter:p=>fmtN(waterfall[p.dataIndex].actual),color:c.text,fontSize:9}}
+    ]
+  });
+
+  /* Backlog Top 10 */
+  const t10=[...p].sort((a,b)=>(b.backlog||0)-(a.backlog||0)).slice(0,10);
+  const ec3=initEC('blWrap','215px');
+  if(ec3)ec3.setOption({backgroundColor:'transparent',...chartMotion,
+    tooltip:chartTip(ps=>`<b>${ps[0]?.axisValue}</b><br>Backlog: ${fmtN(ps[0]?.value)} ر`),
+    grid:{top:5,bottom:5,left:8,right:75,containLabel:true},
+    xAxis:{axisLabel:{color:c.text,fontSize:9,formatter:v=>fmtN(v)},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false}},
+    yAxis:{type:'category',data:t10.map(projectName).reverse(),axisLabel:{color:c.text,fontSize:10,width:90,overflow:'truncate'},axisLine:{show:false},axisTick:{show:false}},
+    series:[{type:'bar',data:t10.map(x=>x.backlog||0).reverse(),
+      itemStyle:{color:ELM.backlog,borderRadius:[0,4,4,0]},
+      barMaxWidth:10,label:{show:true,position:'right',formatter:p=>fmtN(p.value),color:c.text,fontSize:9}
+    }]
+  });
+  bindChartDetails(ec3,[...t10].reverse());
+}
+
+/* ══ EXPIRY LIST ══ */
+function renderExpiryList(){
+  const wd=[...DATA].filter(x=>x._daysRem!==null).sort((a,b)=>a._daysRem-b._daysRem).slice(0,3);
+  if(!wd.length){$('expiryList').innerHTML='<p style="text-align:center;color:var(--text3);padding:16px">لا توجد بيانات</p>';return;}
+  const maxD=Math.max(...wd.map(x=>Math.max(0,x._daysRem)));
+  $('expiryList').innerHTML=`<div class="exp-list">${wd.map(p=>{
+    const d=p._daysRem,col=urgClr(d),pct=maxD>0?Math.round(Math.max(0,d)/maxD*100):0;
+    const dlbl=d<0?'منتهي':d===0?'اليوم':`${d} ي`;
+    return`<div class="exp-row" data-code="${escAttr(p.project_code)}" role="button" tabindex="0">
+      <div class="exp-top">
+        <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
+        <div class="exp-name">${projectName(p)}</div>
+        <div class="exp-days" style="color:${col}">${dlbl}</div>
+      </div>
+      <div class="exp-track"><div class="exp-fill" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ══ RISK MATRIX ══ */
+function renderRiskMatrix(){
+  const p=DATA,c=gc();
+  const maxRisk=Math.max(1,...p.map(x=>Math.abs(Number(x.risk)||0)));
+  const maxContract=Math.max(1,...p.map(x=>Math.max(0,Number(x.total_contract_value)||0)));
+  const maxBacklog=Math.max(1,...p.map(x=>Math.max(0,Number(x.backlog)||0)));
+  const maxLoss=Math.max(1,...p.map(x=>Math.max(0,(Number(x.total_cost)||0)-(Number(x.total_revenue)||0))));
+  const statusWeight={Ongoing:55,Completed:10,Closed:6,'On-hold':90,'On Hold':90,Pipeline:38};
+  const levels={
+    green:{label:'منخفض',color:ELM.healthy},
+    yellow:{label:'متوسط',color:ELM.warning},
+    orange:{label:'مرتفع',color:ELM.cost},
+    red:{label:'حرج',color:ELM.risk},
+  };
+  const scored=p.map(project=>{
+    const progress=clamp(Number(project.progress_completed)||0,0,100);
+    const days=project._daysRem;
+    const daysRisk=days===null?65:days<0?100:days<30?86:days<90?62:days<180?38:20;
+    const statusRisk=statusWeight[project.status]??55;
+    const riskNorm=clamp(Math.abs(Number(project.risk)||0)/maxRisk*100,0,100);
+    const contractNorm=clamp(Math.max(0,Number(project.total_contract_value)||0)/maxContract*100,0,100);
+    const backlogNorm=clamp(Math.max(0,Number(project.backlog)||0)/maxBacklog*100,0,100);
+    const netLoss=Math.max(0,(Number(project.total_cost)||0)-(Number(project.total_revenue)||0));
+    const lossNorm=clamp(netLoss/maxLoss*100,0,100);
+    const probability=clamp(riskNorm*.35+statusRisk*.25+daysRisk*.25+(100-progress)*.15,0,100);
+    const impact=clamp(contractNorm*.40+backlogNorm*.35+lossNorm*.25,0,100);
+    const matrixScore=Math.sqrt(probability*impact);
+    const level=matrixScore>=70?'red':matrixScore>=55?'orange':matrixScore>=35?'yellow':'green';
+    const reasons=[];
+    if(netLoss>0)reasons.push('خسارة صافية');
+    if(contractNorm>=70)reasons.push('قيمة عقد مرتفعة');
+    if(days!==null&&days<0&&!['Completed','Closed'].includes(project.status))reasons.push('مشروع متأخر');
+    else if(days!==null&&days<30&&!['Completed','Closed'].includes(project.status))reasons.push('عقد قريب الانتهاء');
+    if(backlogNorm>=70)reasons.push('Backlog مرتفع');
+    if(riskNorm>=70)reasons.push('قيمة مخاطر مرتفعة');
+    if(['On Hold','On-hold'].includes(project.status))reasons.push('مشروع متوقف');
+    if(progress<50&&days!==null&&days<90)reasons.push('تقدم منخفض');
+    if(!reasons.length)reasons.push('المؤشرات ضمن الحدود المعتادة');
+    return{project,probability,impact,level,riskNorm,contractNorm,backlogNorm,lossNorm,netLoss,reasons};
+  });
+  const ec=initEC('riskMatrix','285px');
+  if(ec)ec.setOption({backgroundColor:'transparent',...chartMotion,
+    tooltip:chartItemTip(param=>{const s=param.data.score;const x=s.project,d=x._daysRem;return`<div style="min-width:245px"><b style="font-size:12px">${projectName(x)}</b><div style="color:${c.text};margin:3px 0 6px">رمز المشروع: ${x.project_code||'—'}</div><div>قيمة العقد <b style="float:left">${fmtN(x.total_contract_value)} ريال</b></div><div>Backlog <b style="float:left">${fmtN(x.backlog)} ريال</b></div><div>الإيرادات <b style="float:left">${fmtN(x.total_revenue)} ريال</b></div><div>التكاليف <b style="float:left">${fmtN(x.total_cost)} ريال</b></div><div>صافي الربح <b style="float:left">${fmtN(x.net_profit)} ريال</b></div><div>هامش الربح <b style="float:left">${fmtPct(x.profit_pct||0)}</b></div><div>الأيام المتبقية <b style="float:left">${d===null?'غير متاح':d}</b></div><div>التقدم <b style="float:left">${Number(x.progress_completed||0).toFixed(0)}%</b></div><div>الحالة <b style="float:left">${stAr(x.status)}</b></div><div>مستوى المخاطر <b style="float:left;color:${levels[s.level].color}">${levels[s.level].label}</b></div><div style="border-top:1px solid ${c.grid};margin-top:6px;padding-top:5px">سبب التصنيف: <b>${s.reasons.join('، ')}</b></div></div>`}),
+    legend:{...chartLegend(),formatter:name=>{const entry=Object.values(levels).find(l=>l.label===name);const key=Object.keys(levels).find(k=>levels[k]===entry);return`${name} ${scored.filter(s=>s.level===key).length}`;}},
+    grid:{top:42,bottom:38,left:48,right:18},
+    xAxis:{type:'value',name:'الاحتمالية',nameLocation:'middle',nameGap:26,min:0,max:100,axisLabel:{color:c.text,fontSize:9,formatter:v=>`${v}%`},nameTextStyle:{color:c.text,fontFamily:'IBM Plex Sans Arabic',fontSize:10},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false}},
+    yAxis:{type:'value',name:'الأثر',nameLocation:'middle',nameGap:34,min:0,max:100,axisLabel:{color:c.text,fontSize:9,formatter:v=>`${v}%`},nameTextStyle:{color:c.text,fontFamily:'IBM Plex Sans Arabic',fontSize:10},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false}},
+    series:Object.entries(levels).map(([key,level],index)=>({name:level.label,type:'scatter',data:scored.filter(s=>s.level===key).map(s=>({value:[s.probability,s.impact],score:s,projectCode:s.project.project_code,itemStyle:{color:level.color,borderColor:isDark()?'#1A2233':'#FFFFFF',borderWidth:1.5},symbolSize:8+Math.sqrt(s.contractNorm/100)*22})),
+      markArea:index===0?{silent:true,data:[
+        [{xAxis:0,yAxis:0,itemStyle:{color:'rgba(61,166,109,.04)'}},{xAxis:50,yAxis:50}],
+        [{xAxis:50,yAxis:0,itemStyle:{color:'rgba(232,171,120,.04)'}},{xAxis:100,yAxis:50}],
+        [{xAxis:0,yAxis:50,itemStyle:{color:'rgba(217,114,78,.04)'}},{xAxis:50,yAxis:100}],
+        [{xAxis:50,yAxis:50,itemStyle:{color:'rgba(217,86,86,.05)'}},{xAxis:100,yAxis:100}],
+      ]}:undefined,markLine:index===0?{silent:true,symbol:'none',lineStyle:{color:c.text2,type:'dashed',width:1},data:[{xAxis:50},{yAxis:50}]}:undefined
+    }))
+  });
+  if(ec){ec.off('click');ec.on('click',event=>{if(event.data?.projectCode)openDetail(event.data.projectCode);});}
+}
+
+/* ══ TABLES ══ */
+function renderTbl(rows){
+  $('tBody').innerHTML=rows.slice(0,20).map(p=>`<tr data-code="${escAttr(p.project_code)}" role="button" tabindex="0">
+    <td><div style="font-weight:500;font-size:12.5px">${projectName(p)}</div></td>
+    <td>${stBadge(p.status)}</td>
+    <td><div style="display:flex;align-items:center;gap:5px"><div class="pbar"><div class="pfill" style="width:${clamp(p.progress_completed||0,0,100)}%"></div></div><span style="font-size:10.5px;color:var(--text2)">${(p.progress_completed||0).toFixed(0)}%</span></div></td>
+    <td class="num">${fmtN(p.total_contract_value)}</td>
+    <td class="num">${fmtN(p.total_revenue)}</td>
+    <td class="num" style="color:${ELM.backlog}">${fmtN(p.backlog)}</td>
+    <td class="num ${(p.net_profit||0)<0?'neg':'pos'}">${fmtN(p.net_profit)}</td>
+    <td>${pSp(p.profit_pct||0)}</td>
+    <td>${dL(p._daysRem)}</td>
+  </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">لا توجد مشاريع</td></tr>';
+}
+function fTbl(){
+  const q=$('tQ').value.toLowerCase();
+  renderTbl(DATA.filter(p=>(curSt==='all'||p.status===curSt)&&((p.project_name_ar||'').includes(q)||(p.project_name_en||'').toLowerCase().includes(q)||(p.project_code||'').toLowerCase().includes(q))));
+}
+function fSt(el,s){curSt=s;document.querySelectorAll('#statusChips .chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');fTbl();}
+
+let curPStVal='all',curProfitVal='all';
+function renderPrj(){
+  let rows=DATA;
+  const q=$('pQ')?.value?.toLowerCase()||'';
+  if(curPSt!=='all')rows=rows.filter(p=>p.status===curPSt||(curPSt==='On Hold'&&p.status==='On-hold'));
+  if(curProfit==='neg')rows=rows.filter(p=>(p.net_profit||0)<0);
+  else if(curProfit==='pos')rows=rows.filter(p=>(p.net_profit||0)>=0);
+  if(q)rows=rows.filter(p=>(p.project_name_ar||'').includes(q)||(p.project_name_en||'').toLowerCase().includes(q)||(p.project_code||'').toLowerCase().includes(q));
+  $('pBody').innerHTML=rows.map(p=>`<tr data-code="${escAttr(p.project_code)}" role="button" tabindex="0">
+    <td><div style="font-weight:500;font-size:12.5px">${p.project_name_ar||'—'}</div><div style="font-size:10px;color:var(--text3)">${p.project_code}</div></td>
+    <td style="font-size:10.5px;color:var(--text2)">${p.project_code}</td>
+    <td style="font-size:11px;color:var(--text2)">${p.bu||'—'}</td>
+    <td>${stBadge(p.status)}</td>
+    <td><div class="pbar"><div class="pfill" style="width:${clamp(p.progress_completed||0,0,100)}%"></div></div></td>
+    <td class="num">${fmtN(p.total_contract_value)}</td>
+    <td class="num">${fmtN(p.total_revenue)}</td>
+    <td class="num" style="color:${ELM.backlog}">${fmtN(p.backlog)}</td>
+    <td class="num">${fmtN(p.total_cost)}</td>
+    <td class="num ${(p.net_profit||0)<0?'neg':'pos'}">${fmtN(p.net_profit)}</td>
+    <td>${pSp(p.profit_pct||0)}</td>
+    <td style="font-size:10.5px;color:var(--text2)">${p._effEnd||'—'}</td>
+    <td>${dL(p._daysRem)}</td>
+  </tr>`).join('')||'<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--text3)">لا توجد مشاريع</td></tr>';
+}
+function fPrj(){renderPrj();}
+function fPSt(el,s){curPSt=s;el.closest('.chips').querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');renderPrj();}
+function fProfit(el,s){curProfit=s;el.closest('.chips').querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');renderPrj();}
+
+/* ══ PROJECT DETAILS ══ */
+function openDetail(code){
+  const p=DATA.find(x=>x.project_code===code);
+  if(!p){return;}
+  $('detBread').textContent=p.project_name_ar||code;
+  const eff=p._effEnd||'—';
+  const d=p._daysRem;
+  const dClr=d===null?'var(--text)':d<0?ELM.risk:d<=30?ELM.risk:d<=90?ELM.warning:ELM.healthy;
+
+  const sec=(title,icon,rows)=>`<div class="det-section"><div class="det-sec-title"><svg viewBox="0 0 24 24" style="stroke:var(--text3)">${icon}</svg>${title}</div>${rows.map(r=>`<div class="det-row"><span class="det-key">${r[0]}</span><span class="det-val ${r[2]||''}">${r[1]}</span></div>`).join('')}</div>`;
+
+  const svgs={info:`<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`,cal:`<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`,money:`<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>`,rev:`<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>`,cost:`<path d="M21 10H3M21 6H3M21 14H3M21 18H3"/>`,prof:`<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>`,plan:`<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>`};
+
+  const profClass=v=>v<0?'neg':v>0?'pos':'';
+
+  $('detContent').innerHTML=`
+    <div class="det-header">
+      <div class="det-name-ar">${p.project_name_ar||'—'}</div>
+      <div class="det-name-en">رمز المشروع: ${p.project_code}</div>
+      <div class="det-meta">
+        ${stBadge(p.status)}
+        ${p.bu?`<span class="det-meta-item"><svg viewBox="0 0 24 24">${svgs.info}</svg>${p.bu}</span>`:''}
+        ${p.project_manager?`<span class="det-meta-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>${p.project_manager}</span>`:''}
+        ${p.customer_id?`<span class="det-meta-item"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${p.customer_id}</span>`:''}
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:11px;color:var(--text2)">التقدم</span>
+        <span style="font-size:11.5px;font-weight:600;color:var(--text)">${(p.progress_completed||0).toFixed(0)}%</span>
+      </div>
+      <div class="det-progress-wrap"><div class="det-progress-fill" style="width:${clamp(p.progress_completed||0,0,100)}%"></div></div>
+    </div>
+
+    <div class="det-sections">
+      ${sec('معلومات العقد',svgs.cal,[
+        ['تاريخ البداية',p.start_date||'—'],
+        ['تاريخ الانتهاء',p.end_date||'—'],
+        ['الانتهاء المعدّل',p.amended_end_date||'—'],
+        ['تاريخ الانتهاء الفعلي',eff],
+        ['المدة المتبقية',d===null?'—':d<0?`منتهي منذ ${Math.abs(d)} يوم`:d===0?'ينتهي اليوم':`${d} يوم`,(d!==null&&d<=30)?'neg':d!==null&&d<=90?'warn':''],
+      ])}
+      ${sec('قيمة العقد',svgs.money,[
+        ['قيمة العقد الأساسية',fmtC(p.contract_value)],
+        ['طلبات التغيير',fmtC(p.amendment_crs)],
+        ['إجمالي قيمة العقد',fmtC(p.total_contract_value)],
+      ])}
+      ${sec('الإيرادات',svgs.rev,[
+        ['إيرادات السنوات السابقة',fmtC(p.previous_years_rev)],
+        ['الإيرادات الحالية',fmtC(p.revenue_current)],
+        ['دخل آخر',fmtC(p.other_income)],
+        ['إجمالي الإيرادات',fmtC(p.total_revenue)],
+        ['Backlog المتبقي',fmtC(p.backlog)],
+      ])}
+      ${sec('التكاليف',svgs.cost,[
+        ['تكاليف السنوات السابقة',fmtC(p.previous_years_cost)],
+        ['تكلفة الإيرادات',fmtC(p.cost_of_revenue)],
+        ['تكاليف أخرى',fmtC(p.other_cost)],
+        ['إجمالي التكاليف',fmtC(p.total_cost)],
+      ])}
+      ${sec('الربحية',svgs.prof,[
+        ['هامش الربح حتى 2025',fmtC(p.pm_up_to_2025)],
+        ['نسبة هامش الربح حتى 2025',fmtPct(p.pm_pct_up_to_2025)],
+        ['إجمالي الربح 2026',fmtC(p.gp_2026)],
+        ['هامش الربح 2026',fmtC(p.pm_2026)],
+        ['نسبة هامش الربح 2026',fmtPct(p.pm_pct_2026),(p.pm_pct_2026||0)<0?'neg':(p.pm_pct_2026||0)>0?'pos':''],
+        ['الأرباح والخسائر',fmtC(p.pl)],
+        ['صافي الربح',fmtC(p.net_profit),profClass(p.net_profit||0)],
+        ['نسبة الربحية',fmtPct(p.profit_pct),profClass(p.profit_pct||0)],
+      ])}
+      ${sec('خطة التكاليف',svgs.plan,[
+        ['أوامر الشراء',fmtC(p.po)],['الموارد البشرية',fmtC(p.hr)],
+        ['أخرى (خارجية)',fmtC(p.other_external)],
+        ['أخرى (داخلية)',fmtC(p.other_internal)],
+        ['المخاطر',fmtC(p.risk)],['الطوارئ',fmtC(p.contingency)],
+        ['إجمالي التكلفة المخططة',fmtC(p.total_planned_cost)],
+        ['الربح المخطط',fmtC(p.planned_profit)],
+        ['نسبة هامش الربح المخطط',fmtPct(p.planned_pm_pct)],
+        ['الانحراف %',fmtPct(p.variance),(p.variance||0)<0?'neg':''],
+      ])}
+    </div>`;
+
+  go('detail',null);
+}
+
+/* ══ TIMELINE ══ */
+function renderTL(){
+  const wd=DATA.filter(x=>x.start_date&&x._effEnd).slice(0,35);
+  if(!wd.length){$('tlCont').innerHTML='<p style="text-align:center;color:var(--text3);padding:24px">لا توجد بيانات تواريخ</p>';return;}
+  const aD=wd.flatMap(x=>[new Date(x.start_date),new Date(x._effEnd)]);
+  const mn=new Date(Math.min(...aD)),mx=new Date(Math.max(...aD)),td=new Date();
+  const sp=mx-mn||1,tp=clamp(((td-mn)/sp)*100,0,100);
+  $('tlCont').innerHTML=wd.map(p=>{
+    const s=new Date(p.start_date),e=new Date(p._effEnd);
+    const l=((s-mn)/sp)*100,w=((e-s)/sp)*100,dw=w*(p.progress_completed||0)/100;
+    return`<div class="tl-row"><button type="button" class="tl-nm" data-code="${escAttr(p.project_code)}">${projectName(p)}</button><div class="tl-bar"><div class="tl-done" style="right:${l}%;width:${dw}%"></div><div class="tl-rem" style="right:${l+dw}%;width:${w-dw}%"></div><div class="tl-now" style="right:${tp}%"></div></div><div class="tl-d">${dL(p._daysRem)}</div></div>`;
+  }).join('');
+}
+
+/* ══ FINANCIALS PAGE ══ */
+function renderFin(){
+  const p=DATA,c=gc();
+  const k=calcKPIs(p);
+  const amendments=METRICS.amendments_total||0;
+  const currentRevenue=METRICS.current_year_revenue||0;
+  const currentCost=METRICS.current_year_cost||0;
+  const svgs={file:`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`,edit:`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`,dollar:`<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>`,cal:`<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`};
+  $('finGrid').innerHTML=[
+    {v:fmtN(k.tCV)+' ريال',l:'إجمالي قيمة العقود',ic:svgs.file,acc:'#AE8FD5',sub:`يشمل تعديلات عقود بقيمة<strong>${Math.round(amendments/1e6).toLocaleString('ar-SA')} مليون ريال</strong>`},
+    {v:fmtN(k.tRev)+' ريال',l:'إجمالي الإيرادات',ic:svgs.dollar,acc:ELM.revenue,sub:`منها<strong>${fmtN(currentRevenue)} ريال</strong>إيرادات الفترة الحالية`},
+    {v:fmtN(k.tCost)+' ريال',l:'إجمالي التكاليف',ic:svgs.edit,acc:ELM.cost,sub:`منها<strong>${fmtN(currentCost)} ريال</strong>تكاليف الفترة الحالية`},
+    {v:fmtN(k.tNet)+' ريال',l:'صافي الربح',ic:svgs.cal,acc:k.tNet>=0?ELM.profit:ELM.risk,sub:'الإيرادات مطروحًا منها<br>إجمالي التكاليف'},
+    {v:fmtPct(k.pMargin),l:'هامش الربح',ic:`<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>`,acc:k.pMargin>=0?ELM.profit:ELM.risk,sub:'صافي الربح كنسبة من<br>إجمالي الإيرادات'},
+  ].map(k2=>`<article class="kpi" style="--kpi-accent:${k2.acc}"><div class="kpi-top"></div><div class="kpi-head"><div class="kpi-ic"><svg viewBox="0 0 24 24">${k2.ic}</svg></div><div class="kpi-lbl">${k2.l}</div></div><div class="kpi-val">${k2.v}</div><div class="kpi-subtitle">${k2.sub}</div></article>`).join('');
+
+  // Profit distribution
+  const rg={'خاسر':0,'0-10%':0,'10-20%':0,'20-30%':0,'+30%':0};
+  p.forEach(x=>{const v=x.profit_pct||0;if(v<0)rg['خاسر']++;else if(v<10)rg['0-10%']++;else if(v<20)rg['10-20%']++;else if(v<30)rg['20-30%']++;else rg['+30%']++;});
+  const ec=initEC('prWrap','175px');
+  if(ec)ec.setOption({backgroundColor:'transparent',...chartMotion,
+    tooltip:chartTip(ps=>`<b>${ps[0]?.axisValue||''}</b><br>عدد المشاريع: <b>${ps[0]?.value||0}</b>`),
+    grid:{top:5,bottom:22,left:8,right:8,containLabel:true},
+    xAxis:{type:'category',data:Object.keys(rg),axisLabel:{color:c.text,fontSize:10},axisLine:{show:false},axisTick:{show:false}},
+    yAxis:{axisLabel:{color:c.text,fontSize:10},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false}},
+    series:[{type:'bar',data:Object.entries(rg).map(([k,v],i)=>({value:v,itemStyle:{color:[ELM.risk,ELM.cost,ELM.warning,'#AE8FD5',ELM.profit][i],borderRadius:[4,4,0,0]}})),barMaxWidth:28}]
+  });
+
+  // Losing projects list
+  const neg=p.filter(x=>(x.net_profit||0)<0).sort((a,b)=>(a.net_profit||0)-(b.net_profit||0));
+  $('losingList').innerHTML=neg.length?neg.map(x=>`<button type="button" class="losing-row" data-code="${escAttr(x.project_code)}"><span>${projectName(x)}</span><strong class="neg">${fmtN(x.net_profit)} ر</strong></button>`).join(''):'<p style="text-align:center;color:var(--text3);padding:16px">✓ لا توجد مشاريع خاسرة</p>';
+}
+
+/* ══ DATA QUALITY ══ */
+function renderQuality(){
+  const p=DATA;
+  const issues=[];
+  const noArName=p.filter(x=>!x.project_name_ar);
+  const noStatus=p.filter(x=>!x.status||x.status==='');
+  const noDate=p.filter(x=>!x.end_date&&!x.amended_end_date);
+  const noMgr=p.filter(x=>!x.project_manager);
+  const negPct=p.filter(x=>(x.profit_pct||0)<-100||(x.profit_pct||0)>200);
+
+  const svgs={alert:`<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>`,info:`<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`};
+
+  if(noArName.length)issues.push({ic:svgs.alert,ibg:'rgba(220,38,38,.09)',clr:'#F87171',t:`${noArName.length} مشروع بدون اسم عربي`,c:`المشاريع: ${noArName.slice(0,3).map(x=>x.project_code).join('، ')}`});
+  if(noStatus.length)issues.push({ic:svgs.alert,ibg:'rgba(217,119,6,.09)',clr:'#FCD34D',t:`${noStatus.length} مشروع بدون حالة`,c:`المشاريع: ${noStatus.slice(0,3).map(x=>x.project_name_ar||x.project_code).join('، ')}`});
+  if(noDate.length)issues.push({ic:svgs.alert,ibg:'rgba(234,88,12,.09)',clr:'#FB923C',t:`${noDate.length} مشروع بدون تاريخ انتهاء`,c:`المشاريع: ${noDate.slice(0,3).map(x=>x.project_name_ar||x.project_code).join('، ')}`});
+  if(noMgr.length)issues.push({ic:svgs.info,ibg:'rgba(124,58,237,.09)',clr:'#A78BFA',t:`${noMgr.length} مشروع بدون مدير مشروع`,c:`المشاريع: ${noMgr.slice(0,3).map(x=>x.project_name_ar||x.project_code).join('، ')}`});
+  if(negPct.length)issues.push({ic:svgs.info,ibg:'rgba(6,182,212,.09)',clr:'#22D3EE',t:`${negPct.length} مشروع بنسبة ربح غير منطقية`,c:`قيم خارج نطاق -100% إلى 200%`});
+  if(!issues.length)issues.push({ic:`<polyline points="20 6 9 17 4 12"/>`,ibg:'rgba(22,163,74,.09)',clr:'#4ADE80',t:'البيانات في حالة جيدة',c:'لا توجد مشاكل في جودة البيانات'});
+
+  $('dqList').innerHTML=issues.map(i=>`<div class="dq-item"><div class="dq-ic" style="background:${i.ibg}"><svg viewBox="0 0 24 24" style="stroke:${i.clr};fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${i.ic}</svg></div><div><div class="dq-text">${i.t}</div><div class="dq-count">${i.c}</div></div></div>`).join('');
+}
+
+/* ══ TICKER ══ */
+function updateTicker(){
+  const expiring=[...DATA].filter(x=>x._daysRem!==null&&x._daysRem>=0&&x._daysRem<30).sort((a,b)=>a._daysRem-b._daysRem);
+  const losing=[...DATA].filter(x=>(x.total_revenue||0)<(x.total_cost||0)).sort((a,b)=>(a.net_profit||0)-(b.net_profit||0));
+  const overdue=[...DATA].filter(x=>x._daysRem!==null&&x._daysRem<0&&!['Completed','Closed'].includes(x.status)).sort((a,b)=>a._daysRem-b._daysRem);
+  const highRisk=[...DATA].filter(x=>(x.risk||0)>0).sort((a,b)=>(b.risk||0)-(a.risk||0));
+  const highBacklog=[...DATA].filter(x=>(x.backlog||0)>0).sort((a,b)=>(b.backlog||0)-(a.backlog||0));
+  const msgs=[];
+  if(expiring[0])msgs.push(`تنبيه انتهاء: ${projectName(expiring[0])} — متبقي ${expiring[0]._daysRem} يومًا`);
+  if(losing[0])msgs.push(`تنبيه خسارة: ${projectName(losing[0])} — خسارة ${fmtN(Math.abs(losing[0].net_profit||0))} ريال`);
+  if(overdue[0])msgs.push(`تنبيه تأخير: ${projectName(overdue[0])} — متأخر ${Math.abs(overdue[0]._daysRem)} يومًا`);
+  if(highRisk[0])msgs.push(`تنبيه مخاطر: ${projectName(highRisk[0])} — قيمة المخاطر ${fmtN(highRisk[0].risk)} ريال`);
+  if(highBacklog[0])msgs.push(`تنبيه Backlog: ${projectName(highBacklog[0])} — ${fmtN(highBacklog[0].backlog)} ريال`);
+  if(!msgs.length)msgs.push('لا توجد تنبيهات حرجة حاليًا');
+  for(let i=1;i<=5;i++){$(`tk${i}`).textContent=msgs[i-1]||'';document.querySelectorAll(`.tkd${i}`).forEach(el=>el.textContent=msgs[i-1]||'');}
+}
+
+/* ══ GLOBAL SEARCH ══ */
+function globalFilter(){
+  const q=$('globalSearch').value.toLowerCase();
+  if(!q)return;
+  const match=DATA.filter(p=>(p.project_name_ar||'').includes(q)||(p.project_name_en||'').toLowerCase().includes(q)||(p.project_code||'').toLowerCase().includes(q));
+  if(match.length===1){openDetail(match[0].project_code);}
+  else if(match.length>0){$('pQ').value=q;renderPrj();go('projects',null);}
+}
+
+/* ══ NAVIGATION ══ */
+const pgT={overview:'لوحة القيادة التنفيذية',projects:'جميع المشاريع',detail:'تفاصيل المشروع',timeline:'الجدول الزمني',financials:'التحليل المالي',quality:'جودة البيانات'};
+function go(name,el){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(x=>x.classList.remove('on'));
+  $('page-'+name)?.classList.add('active');
+  // activate sidebar item by data-page attribute
+  const navEl=el||document.querySelector(`.ni[data-page="${name}"]`);
+  if(navEl)navEl.classList.add('on');
+  $('pgTitle').textContent=pgT[name]||name;
+  if(name==='financials')setTimeout(renderFin,50);
+}
+
+/* ══ COPILOT ══ */
+let copOpen=false;
+function toggleCop(){copOpen?closeCop():openCop();}
+function openCop(){copOpen=true;$('copPanel').classList.add('open');$('copOvl').classList.add('show');}
+function closeCop(){copOpen=false;$('copPanel').classList.remove('open');$('copOvl').classList.remove('show');}
+function sendS(btn){$('copIn').value=btn.textContent;$('copSugg').style.display='none';sendCop();}
+
+async function sendCop(){
+  const q=$('copIn').value.trim();if(!q)return;
+  const m=$('copMsgs');
+  m.innerHTML+=`<div class="bubble bu">${q}</div>`;
+  $('copIn').value='';$('copSend').disabled=true;
+  const th=document.createElement('div');th.className='thinking';
+  th.innerHTML='<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+  m.appendChild(th);m.scrollTop=m.scrollHeight;
+  try{
+    const r=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})});
+    const d=await r.json();th.remove();
+    const typeMap={financial:'تحليل مالي',contract:'العقود',project:'المشاريع',general:'تحليل عام',report:'تقرير تنفيذي'};
+    const tp=typeMap[(d.query_type||'').replace('_query','')]||'';
+    m.innerHTML+=`<div class="bubble bai">${tp?`<div class="btype">${tp}</div>`:''}${d.answer||d.error||'خطأ'}</div>`;
+  }catch{th.remove();m.innerHTML+=`<div class="bubble bai">خطأ في الاتصال</div>`;}
+  $('copSend').disabled=false;m.scrollTop=m.scrollHeight;
+}
+$('copIn').addEventListener('keydown',e=>{if(e.key==='Enter')sendCop();});
+
+try{
+  const savedTheme=localStorage.getItem('elm-theme');
+  if(savedTheme==='light'||savedTheme==='dark'){
+    document.documentElement.setAttribute('data-theme',savedTheme);
+    document.documentElement.style.colorScheme=savedTheme;
+    $('thL').classList.toggle('on',savedTheme==='light');
+    $('thD').classList.toggle('on',savedTheme==='dark');
+  }
+}catch{}
+
+// One delegated detail handler covers current and future tables, cards, and lists.
+document.addEventListener('click',event=>{
+  const trigger=event.target.closest('[data-code]');
+  if(trigger?.dataset.code)openDetail(trigger.dataset.code);
+});
+document.addEventListener('keydown',event=>{
+  if(event.key!=='Enter'&&event.key!==' ')return;
+  const trigger=event.target.closest('[data-code]');
+  if(!trigger?.dataset.code)return;
+  event.preventDefault();
+  openDetail(trigger.dataset.code);
+});
+
+window.addEventListener('resize',()=>Object.values(eCharts).forEach(c=>{try{c.resize()}catch{}}));
+loadData();
+</script>
+</body>
+</html>

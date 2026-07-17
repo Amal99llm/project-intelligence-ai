@@ -1,0 +1,31 @@
+# Web Framework
+flask==3.0.3
+flask-limiter==3.8.0
+
+# Data Processing
+pandas==2.2.2
+openpyxl==3.1.5
+
+# PDF Processing
+pypdf==4.3.1
+
+# AI / LLM  (swap this section for local LLM later)
+openai==1.40.0
+
+# Vector Database
+chromadb==0.5.5
+
+# Database ORM  (swap dialect for PostgreSQL later)
+sqlalchemy==2.0.32
+
+# Security & Utilities
+python-dotenv==1.0.1
+bleach==6.1.0
+werkzeug==3.0.4
+rapidfuzz==3.9.6
+
+# Telegram Bot (Phase 2 — install when needed)
+# python-telegram-bot==21.5
+# الأساسيات لتشغيل التطبيق على Railway
+flask>=3.0.0
+gunicorn>=21.2.0
