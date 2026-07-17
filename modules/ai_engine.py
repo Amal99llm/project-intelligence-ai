@@ -46,6 +46,7 @@ from modules.contract_semantics import analyze_contract_request, render_contract
 from modules.knowledge_boundary import classify_boundary, boundary_answer
 from modules.executive_analysis import format_attention_summary, project_attention
 from modules import query_builder, query_executor, query_schema, response_formatter, verification
+from modules.query_planner import build_plan
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,17 @@ _NEXT_NORM = {normalize_project_text(w) for w in ("اللي بعده", "التا
 
 def _try_resolve_pending(query: str, ctx: dict):
     pending = ctx.get("pending_project_confirmation")
+    # A consumed choice is no longer pending, but its immutable option list is
+    # still valid for immediate navigation such as "and the second one".
+    if not pending and ctx.get("last_disambiguation_options"):
+        normalized_query = normalize_project_text(query)
+        tokens = set(normalized_query.split())
+        if any(word in tokens or normalize_project_text("و" + word) in tokens for word in _ORDINAL_NORM):
+            pending = {
+                "candidates": list(ctx["last_disambiguation_options"]),
+                "kind": "lookup",
+                "original_query": ctx.get("last_disambiguation_query"),
+            }
     if not pending or not pending.get("candidates"):
         return None
     candidates = pending["candidates"]
@@ -234,6 +246,45 @@ def _list_ctx(src: dict | None) -> dict:
         "last_list_filters": list(ctx.get("filters") or []),
         "last_list_sort": ctx.get("sort"),
     }
+
+
+def _execute_compound_plan(plan, query: str, today: date, projects: list, ctx: dict):
+    """Execute every deterministic step and compose the sections in order."""
+    sections: list[str] = []
+    source = None
+    by_code = {row.get("project_code"): row for row in projects}
+    for step in plan.steps:
+        if step.operation in {"get_summary", "get_metrics"} and step.project_code:
+            row, step_source = _lookup_verified(step.project_code, today, projects, query)
+            if not row:
+                continue
+            source = source or step_source
+            if step.operation == "get_metrics":
+                sections.append(format_project_metrics(row, list(step.metrics)))
+            else:
+                sections.append(_format_project(row, query, ctx, None, "summary"))
+        elif step.operation == "compare" and len(plan.project_codes) >= 2:
+            rows = [by_code.get(code) for code in plan.project_codes[:2]]
+            if all(rows):
+                from modules.comparison_engine import format_comparison
+                sections.append(format_comparison(rows, query))
+    if not sections:
+        return None
+    active = plan.project_codes[0] if plan.project_codes else None
+    active_row = by_code.get(active) if active else None
+    metrics = list(plan.steps[0].metrics) if plan.steps and plan.steps[0].metrics else []
+    updates = {
+        "active_project_code": active,
+        "active_project_display_name": ((active_row or {}).get("project_name_ar") or
+                                         (active_row or {}).get("project_name_en") or active),
+        "comparison_project_ids": plan.project_codes[:2] if len(plan.project_codes) >= 2 else [],
+        "last_result_type": "comparison" if len(plan.project_codes) >= 2 else "project_kpi",
+        "last_requested_metric": metrics[-1] if metrics else None,
+        "last_metrics": metrics,
+        "last_operation": "compound_query",
+        "pending_project_confirmation": None,
+    }
+    return "\n\n".join(sections), PROJECT_COMPARISON if len(plan.project_codes) >= 2 else PROJECT_KPI, source, updates
 
 
 # ── Follow-up Gate handler ────────────────────────────────────────────────────
@@ -610,7 +661,9 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         options = list(pstate.get("candidates") or [])
         upd.update({"active_project_code": code, "last_project_code": code,
                     "active_project_display_name": name, "last_project_display_name": name,
-                    "pending_project_confirmation": pstate,
+                    # Selection consumes the pending action.  Keep the option
+                    # snapshot separately for "and the second" navigation.
+                    "pending_project_confirmation": None,
                     "last_disambiguation_options": options,
                     "last_disambiguation_query": pstate.get("original_query"),
                     "selected_disambiguation_index": pstate.get("selected_index")})
@@ -643,6 +696,16 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         text = _format_project(row, orig, ctx, orig_field.canonical if orig_field else None, "field_lookup")
         upd["last_result_type"] = "project_kpi" if orig_field else "project_summary"
         return text, PROJECT_KPI if orig_field else PROJECT_SUMMARY, src, upd
+
+    # Build a complete plan before any active-project follow-up shortcut.  An
+    # explicit current-turn entity therefore always outranks stale context.
+    planning_projects = fetch_enriched_projects(today=today)
+    plan = build_plan(query, planning_projects, ctx.get("active_project_code"))
+    explicit_entity = bool(plan.project_codes and extract_project_phrase(query))
+    if plan.is_compound and (explicit_entity or len(plan.project_codes) >= 2):
+        planned = _execute_compound_plan(plan, query, today, planning_projects, ctx)
+        if planned:
+            return planned
 
     # Contract/timeline semantics share one structured operation and may carry
     # several metrics. Resolve a current-turn project before active context.
@@ -760,8 +823,14 @@ def answer(query: str, user_id: str = "anonymous",
         response_text, query_type, source_info, ctx_updates = (
             verification.FALLBACK_MESSAGE, "error", None, {}
         )
-    if ctx_updates:
-        session_context.update_context(session_id, **ctx_updates)
+    # One commit per completed turn, regardless of execution route.  Handlers
+    # describe their result; only this boundary writes conversation state.
+    turn_updates = {
+        "last_intent": query_type,
+        "last_operation": query_type,
+    }
+    turn_updates.update(ctx_updates or {})
+    session_context.update_context(session_id, **turn_updates)
     try:
         log_query(query_text=query, query_type=query_type, response_text=response_text,
                   user_id=user_id, source=source, ip_address=ip_address)

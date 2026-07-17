@@ -66,6 +66,20 @@ def _empty_context() -> dict[str, Any]:
         "last_comparison": None,           # {codes:[c1,c2], field:str|None}
         "last_executive_result": None,     # {intent:str, top_project:str|None}
         "last_requested_metric": None,     # last field/KPI discussed
+        # Canonical conversation-state names.  Legacy aliases above remain
+        # readable while callers migrate; commits keep both views in sync.
+        "active_project_id": None,
+        "active_project_name": None,
+        "recent_projects": [],
+        "comparison_projects": [],
+        "pending_confirmation": None,
+        "pending_original_request": None,
+        "pending_disambiguation_options": [],
+        "selected_disambiguation": None,
+        "last_intent": None,
+        "last_operation": None,
+        "last_metrics": [],
+        "conversation_topic": None,
         "_updated_at": time.time(),
     }
 
@@ -97,6 +111,15 @@ def get_context(session_id: str) -> dict[str, Any]:
         return deepcopy(entry)
 
 
+def _deep_merge(target: dict[str, Any], changes: dict[str, Any]) -> None:
+    """Merge nested state without sharing mutable objects with a caller."""
+    for key, value in changes.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _deep_merge(target[key], value)
+        else:
+            target[key] = deepcopy(value)
+
+
 def update_context(session_id: str, **fields: Any) -> None:
     with _lock:
         _purge_expired_locked()
@@ -111,6 +134,35 @@ def update_context(session_id: str, **fields: Any) -> None:
             fields.setdefault("last_project_code", fields["active_project_code"])
         if "active_project_display_name" in fields and fields["active_project_display_name"]:
             fields.setdefault("last_project_display_name", fields["active_project_display_name"])
+
+        # Canonical <-> compatibility aliases.  This is the sole state
+        # boundary: handlers return facts about a turn, never mutate storage.
+        aliases = {
+            "active_project_code": "active_project_id",
+            "active_project_display_name": "active_project_name",
+            "recent_project_ids": "recent_projects",
+            "comparison_project_ids": "comparison_projects",
+            "pending_project_confirmation": "pending_confirmation",
+            "conversation_phase": "conversation_topic",
+        }
+        for legacy, canonical in aliases.items():
+            if legacy in fields:
+                fields.setdefault(canonical, deepcopy(fields[legacy]))
+            elif canonical in fields:
+                fields.setdefault(legacy, deepcopy(fields[canonical]))
+        if "pending_project_confirmation" in fields:
+            pending_value = fields["pending_project_confirmation"]
+            fields.setdefault("pending_original_request", pending_value.get("original_query") if pending_value else None)
+            fields.setdefault("pending_disambiguation_options", deepcopy(pending_value.get("candidates", [])) if pending_value else [])
+        if "selected_disambiguation_index" in fields:
+            fields.setdefault("selected_disambiguation", fields["selected_disambiguation_index"])
+        if "last_user_intent" in fields:
+            fields.setdefault("last_intent", fields["last_user_intent"])
+        elif "last_intent" in fields:
+            fields.setdefault("last_user_intent", fields["last_intent"])
+        if "last_requested_metric" in fields:
+            metric_value = fields["last_requested_metric"]
+            fields.setdefault("last_metrics", [metric_value] if metric_value else [])
 
         # ── Auto-advance conversation phase ──────────────────────────────────
         project_changed = False
@@ -159,7 +211,13 @@ def update_context(session_id: str, **fields: Any) -> None:
             fields.setdefault("pending_project_candidates", candidates)
             fields.setdefault("pending_clarification_type", pending.get("kind") if pending else None)
 
-        entry.update(fields)
+        # Derived values such as recent_project_ids are calculated above.
+        # Mirror them only after all turn normalization has completed.
+        for legacy, canonical in aliases.items():
+            if legacy in fields:
+                fields[canonical] = deepcopy(fields[legacy])
+
+        _deep_merge(entry, fields)
         entry["_updated_at"] = time.time()
 
 
