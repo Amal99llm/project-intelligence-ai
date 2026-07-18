@@ -192,12 +192,20 @@ def _deterministic_conversational_spec(query: str, today_str: str) -> dict | Non
         filters.append({"column": "total_contract_value", "op": ">", "value": float(contract_threshold.group(1)) * multiplier})
     if any(term in q for term in ("منخفضه مقارنه بالمده", "منخفضة مقارنة بالمدة", "behind schedule based on elapsed time", "behind plan")):
         filters.append({"column": "progress_gap", "op": ">=", "value": 20})
+    margin_between_match = re.search(
+        r"(?:هامش\w*|margin)\s*(?:بين|between)\s*(\d+(?:\.\d+)?)\s*%?\s*"
+        r"(?:و\s*|and\s+|to\s+)(\d+(?:\.\d+)?)",
+        q,
+    )
+    if margin_between_match:
+        lower, upper = sorted(float(value) for value in margin_between_match.groups())
+        filters.append({"column": "profit_pct", "op": "between", "value": lower, "value2": upper})
     margin_match = re.search(r"(?:هامش\w*|margin)\s*(?:اقل من|دون|تحت|below|less than)\s*(\d+(?:\.\d+)?)", q)
     if margin_match:
         filters.append({"column": "profit_pct", "op": "<", "value": float(margin_match.group(1))})
     if filters:
         spec = {"filters": filters}
-        if margin_match:
+        if margin_match or margin_between_match:
             spec["sort"] = {"column": "profit_pct", "direction": "ASC"}
             spec["limit"] = 10
         if any(term in q for term in ("كم", "عدد", "count")):
@@ -251,6 +259,16 @@ def _deterministic_conversational_spec(query: str, today_str: str) -> dict | Non
             "filters": [{"column": "project_name_ar", "op": "contains", "value": "الرياض"}],
         })
     return None
+
+
+def is_explicit_portfolio_filter(query: str, today_str: str) -> bool:
+    """True when plural portfolio wording has a deterministic filter spec."""
+    q = normalize_project_text(query)
+    plural_subject = any(term in q for term in ("المشاريع", "مشاريع", "projects"))
+    if not plural_subject:
+        return False
+    spec = _deterministic_conversational_spec(query, today_str)
+    return bool(spec and spec.get("filters"))
 
 
 def build_query(query: str, today_str: str) -> dict:

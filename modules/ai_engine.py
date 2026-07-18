@@ -812,6 +812,13 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         projects = fetch_enriched_projects(today=today)
         return _handle_comparison(query, today, ctx, projects, upd)
 
+    # Explicit plural filtering owns portfolio scope.  It must run before an
+    # active-project field follow-up can consume the metric phrase.
+    if query_builder.is_explicit_portfolio_filter(query, today.isoformat()):
+        projects = fetch_enriched_projects(today=today)
+        text, src = _run_pipeline(PORTFOLIO_FILTER, query, today, projects)
+        return text, PORTFOLIO_FILTER, src, _list_ctx(src)
+
     # Build a complete plan before any active-project follow-up shortcut.  An
     # explicit current-turn entity therefore always outranks stale context.
     planning_projects = fetch_enriched_projects(today=today)
