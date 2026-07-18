@@ -14,6 +14,7 @@ Entry pipeline per turn:
 from __future__ import annotations
 
 import logging
+import hashlib
 from datetime import date
 
 from modules.database import log_query
@@ -49,6 +50,7 @@ from modules import query_builder, query_executor, query_schema, response_format
 from modules.query_planner import build_plan
 from modules.executive_intelligence import classify_executive_request, execute_executive_request
 from modules.time_utils import riyadh_today
+from modules.conversation_state import transition_for_turn
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +223,7 @@ def _resolve_and_respond(query: str, today: date, projects: list, ctx: dict,
             if row:
                 text = _format_project(row, query, ctx, topic, "general_followup")
                 return text, src, {"active_project_code": code}
-        return format_resolution_prompt(resolution), None, {}
+        return format_resolution_prompt(resolution), None, {"last_lookup_succeeded": False}
 
     code = resolution.canonical_project_code
     name = resolution.candidates[0].display_name
@@ -297,8 +299,11 @@ def _list_ctx(src: dict | None) -> dict:
 def _has_contextual_project_reference(query: str) -> bool:
     q = normalize_project_text(query)
     markers = (
-        "هو", "هي", "هذا المشروع", "عنه", "تفاصيله",
-        "مديره", "ربحه", "ايراداته", "الباكلوج حقه", "بينه وبين",
+        "هو", "هي", "هذا المشروع", "عنه", "عنها", "له", "لها", "مشروعه",
+        "تفاصيله", "ملخصه", "مديره", "عميله", "مسؤول المشروع", "المسؤول التنفيذي",
+        "ربحه", "ارباحه", "ايراداته", "تكاليفه", "الباكلوج حقه", "الباك لوق حقه",
+        "backlog حقه", "اعماله المتبقيه", "مخاطره", "انحرافه", "انجازه", "تقدمه",
+        "عقده", "قيمته", "مدته", "متي ينتهي", "كم باقي له", "بينه وبين",
     )
     tokens = set(q.split())
     if any(marker in q if " " in marker else marker in tokens for marker in markers):
@@ -310,6 +315,22 @@ def _contextual_followup(query: str, today: date, ctx: dict) -> tuple | None:
     """Resolve stored portfolio/project references before any LLM-dependent path."""
     q = normalize_project_text(query)
     scope = ctx.get("last_scope") or ctx.get("last_result_scope")
+
+    # Explicit current-turn entities and structured contract/timeline requests
+    # own their normal deterministic resolvers; pronouns only fill an omitted
+    # entity, never override one that the user supplied.
+    if ("مشروع" in q.split() and "هذا المشروع" not in q and
+            len(extract_project_phrase(query)) >= 3):
+        return None
+    if analyze_contract_request(query):
+        return None
+
+    if "المحفظه" in q:
+        projects = fetch_enriched_projects(today=today)
+        fields = detect_requested_fields(query)
+        intent = PORTFOLIO_KPI if fields else PORTFOLIO_SUMMARY
+        return _orchestrate(Understanding(intent=intent, scope="portfolio", confidence=1.0,
+                                          method="context"), query, today, ctx, projects)
 
     # "منهم" refers to the preceding portfolio/list result, never to a stale
     # active project.  Expand only the ellipsis, then reuse the verified query
@@ -331,6 +352,9 @@ def _contextual_followup(query: str, today: date, ctx: dict) -> tuple | None:
 
     if not _has_contextual_project_reference(query):
         return None
+    if ctx.get("last_lookup_succeeded") is False:
+        return ("ما عندي مشروع محدد سابقًا صالح لهذه الإحالة؛ آخر بحث عن مشروع لم ينجح. "
+                "اذكر اسم المشروع المقصود.", "clarification", None, {})
     code = ctx.get("last_selected_project_id") or ctx.get("active_project_code")
     if not code:
         return (
@@ -359,6 +383,34 @@ def _contextual_followup(query: str, today: date, ctx: dict) -> tuple | None:
         "last_result_type": "project_kpi" if metrics else "project_summary",
         "last_requested_metric": metrics[-1] if metrics else None,
     }
+
+
+def _comparison_side_followup(query: str, today: date, ctx: dict) -> tuple | None:
+    """Select first/second from the stored pair only when wording identifies a side."""
+    q = normalize_project_text(query)
+    ids = ctx.get("last_compared_project_ids") or []
+    if len(ids) != 2:
+        return None
+    first = any(token in q for token in ("الاول", "أول مشروع", "المشروع الاول"))
+    second = any(token in q for token in ("الثاني", "ثاني مشروع", "المشروع الثاني"))
+    if first == second:
+        return None
+    code = ids[0 if first else 1]
+    projects = fetch_enriched_projects(today=today)
+    fields = detect_requested_fields(query)
+    row, src = _lookup_verified(code, today, projects, query,
+                                fields[0].canonical if len(fields) == 1 else None)
+    if not row:
+        return verification.PROJECT_FALLBACK_MESSAGE, PROJECT_FOLLOWUP, None, {}
+    name = row.get("project_name_ar") or row.get("project_name_en") or code
+    metric = fields[0].canonical if len(fields) == 1 else None
+    return _format_project(row, query, ctx, metric,
+                           "field_lookup" if metric else "general_followup"), \
+        PROJECT_KPI if metric else PROJECT_SUMMARY, src, {
+            "active_project_code": code, "active_project_display_name": name,
+            "last_result_scope": "project", "last_result_type": "project_kpi" if metric else "project_summary",
+            "last_requested_metric": metric, "last_lookup_succeeded": True,
+        }
 
 
 def _execute_compound_plan(plan, query: str, today: date, projects: list, ctx: dict):
@@ -552,6 +604,7 @@ def _handle_comparison(query: str, today: date, ctx: dict, projects: list, upd: 
             "last_result_type": "comparison",
             "last_comparison": {"codes": codes, "field": field},
             "comparison_project_ids": codes,
+            "last_compared_project_names": names,
             "active_project_code": codes[0],
             "active_project_display_name": names[0],
             "last_project_code": codes[0],
@@ -633,6 +686,14 @@ def _orchestrate(u: Understanding, query: str, today: date, ctx: dict, projects:
                 ranked = next((p for p in projects if p.get("project_code") == ranked_code), None)
                 upd.update({
                     "last_ranked_project_id": ranked_code,
+                    "last_ranked_project_name": (
+                        (ranked or {}).get("project_name_ar") or
+                        (ranked or {}).get("project_name_en") or ranked_code
+                    ),
+                    "last_metric": ((src or {}).get("result_context", {}).get("sort") or {}).get("column"),
+                    "last_rank_direction": "highest" if (
+                        ((src or {}).get("result_context", {}).get("sort") or {}).get("direction") == "DESC"
+                    ) else "lowest",
                     "active_project_code": ranked_code,
                     "active_project_display_name": (
                         (ranked or {}).get("project_name_ar") or
@@ -806,6 +867,10 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
             "pending_original_request": None,
             "pending_disambiguation_options": [],
         }
+
+    side_followup = _comparison_side_followup(query, today, ctx)
+    if side_followup is not None:
+        return side_followup
 
     # Portfolio analysis is deliberately classified before planning, entity
     # resolution, and project follow-up handling.
@@ -1079,7 +1144,32 @@ def answer(query: str, user_id: str = "anonymous",
     if reported_scope is not None:
         turn_updates["last_scope"] = reported_scope
     turn_updates.update(ctx_updates or {})
+    comparison_ids = (ctx_updates or {}).get("last_compared_project_ids") or (ctx_updates or {}).get("comparison_project_ids")
+    if comparison_ids and not (ctx_updates or {}).get("last_compared_project_names"):
+        rows_by_id = {row.get("project_code"): row for row in fetch_enriched_projects(today=today)}
+        turn_updates["last_compared_project_names"] = [
+            (rows_by_id.get(code) or {}).get("project_name_ar") or
+            (rows_by_id.get(code) or {}).get("project_name_en") or code
+            for code in comparison_ids
+        ]
+    turn_updates.update(transition_for_turn(ctx, query_type, turn_updates))
+    if "last_compared_project_names" in turn_updates:
+        # The transition is computed from handler facts, while names can be
+        # enriched at this boundary after those facts are known.
+        turn_updates["last_compared_project_names"] = list(turn_updates["last_compared_project_names"])
     session_context.update_context(session_id, **turn_updates)
+    final_state = session_context.get_context(session_id)
+    safe_session = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:10]
+    logger.debug(
+        "CONTEXT_ROUTE session=%s route=%s scope=%s project_id=%s comparison_ids=%s "
+        "llm_called=%s fallback_used=%s transition=%s",
+        safe_session, query_type, final_state.get("last_scope"),
+        final_state.get("last_selected_project_id"),
+        final_state.get("last_compared_project_ids"),
+        query_type not in {PORTFOLIO_FILTER, PORTFOLIO_RANKING, PROJECT_COMPARISON},
+        query_type in {"controlled_fallback", "error", "clarification"},
+        final_state.get("last_successful_result_type"),
+    )
     try:
         log_query(query_text=query, query_type=query_type, response_text=response_text,
                   user_id=user_id, source=source, ip_address=ip_address)
