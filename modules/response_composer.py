@@ -98,7 +98,9 @@ def _build_brief(project: dict, field: str | None) -> str:
         if canonical == "days_remaining":
             d = int(float(v))
             if d < 0:
-                return f"تجاوز تاريخ الانتهاء بـ{abs(d)} يوم"
+                return f"متأخر بـ {abs(d)} يوم"
+            if d == 0:
+                return "ينتهي اليوم"
             return f"{d} يوم متبقي"
         return str(v)
 
@@ -368,6 +370,8 @@ def _template_fallback(project: dict, field: str | None, arabic: bool, depth: in
         v = project.get(field)
         if v is None:
             return f"لا تتوفر بيانات {label} لهذا المشروع."
+        if field == "amendment_crs" and not float(v or 0):
+            return "لا توجد تعديلات مسجلة."
         # Format value
         if field in _MONEY_FIELDS and v is not None:
             try:
@@ -389,7 +393,8 @@ def _template_fallback(project: dict, field: str | None, arabic: bool, depth: in
         elif field == "days_remaining" and v is not None:
             try:
                 d = int(float(v))
-                val_str = f"تجاوز تاريخ الانتهاء بـ{abs(d)} يوم" if d < 0 else f"{d} يوم متبقٍ"
+                val_str = (f"متأخر بـ {abs(d)} يوم" if d < 0 else
+                           "ينتهي اليوم" if d == 0 else f"{d} يوم متبقٍ")
             except (TypeError, ValueError):
                 val_str = str(v)
         else:

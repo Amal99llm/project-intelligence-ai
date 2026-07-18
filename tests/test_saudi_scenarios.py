@@ -4,7 +4,6 @@ import config
 from modules import query_builder, query_executor, response_formatter
 from modules.semantic_dictionary import detect_small_talk
 from modules.understanding import (
-    OUT_OF_SCOPE,
     PORTFOLIO_FILTER,
     PORTFOLIO_RANKING,
     PORTFOLIO_SUMMARY,
