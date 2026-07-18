@@ -487,7 +487,6 @@ def _llm_understand(query: str, ctx: dict, q_norm: str) -> Understanding:
             messages=messages,
             tools=[_LLM_TOOL],
             tool_choice={"type": "function", "function": {"name": "understand_query"}},
-            temperature=0,
         )
         tool_calls = resp.choices[0].message.tool_calls
         if not tool_calls:

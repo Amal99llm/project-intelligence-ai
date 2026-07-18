@@ -284,7 +284,6 @@ def build_query(query: str, today_str: str) -> dict:
         ],
         tools=[_BUILD_TOOL],
         tool_choice={"type": "function", "function": {"name": "build_query"}},
-        temperature=0,
     )
     tool_calls = response.choices[0].message.tool_calls
     if not tool_calls:

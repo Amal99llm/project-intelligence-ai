@@ -232,8 +232,6 @@ def answer_contract_query(
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
         ],
-        temperature=0.1,
-        max_tokens=1000,
     )
 
     answer = response.choices[0].message.content.strip()

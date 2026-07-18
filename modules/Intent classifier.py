@@ -99,7 +99,6 @@ def classify(query: str) -> str:
         ],
         tools=[_CLASSIFY_TOOL],
         tool_choice={"type": "function", "function": {"name": "classify_intent"}},
-        temperature=0,
     )
     tool_calls = response.choices[0].message.tool_calls
     if not tool_calls:

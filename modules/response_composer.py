@@ -239,8 +239,6 @@ def compose_project_response(
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user_content},
             ],
-            temperature=0.2,
-            max_tokens=300,
         )
         return resp.choices[0].message.content.strip()
     except Exception as exc:
@@ -319,8 +317,6 @@ def compose_assessment_response(
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user_content},
             ],
-            temperature=0.15,
-            max_tokens=350,
         )
         return resp.choices[0].message.content.strip()
     except Exception as exc:
