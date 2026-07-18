@@ -86,8 +86,15 @@ def _empty_context() -> dict[str, Any]:
         "last_selected_project_id": None,
         "last_selected_project_name": None,
         "last_ranked_project_id": None,
+        "last_ranked_project_name": None,
         "last_compared_project_ids": [],
+        "last_compared_project_names": [],
+        "pending_disambiguation_intent": None,
+        "pending_comparison_side": None,
         "last_successful_result_type": None,
+        "last_lookup_succeeded": None,
+        "last_metric": None,
+        "last_rank_direction": None,
         "conversation_topic": None,
         "language_mode": None,
         "_updated_at": time.time(),
@@ -248,6 +255,12 @@ def update_context(session_id: str, **fields: Any) -> None:
 def clear_context(session_id: str) -> None:
     with _lock:
         _store.pop(session_id, None)
+
+
+def reset_conversation_context(session_id: str) -> None:
+    """Start a fresh conversation atomically without changing any UI route."""
+    with _lock:
+        _store[session_id] = _empty_context()
 
 
 def _reset_all_for_tests() -> None:
