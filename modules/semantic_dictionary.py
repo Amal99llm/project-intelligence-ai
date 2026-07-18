@@ -272,7 +272,7 @@ def compose_canonical_fields(query: str) -> list[str]:
             add("revenue_current")
         else:
             add("total_revenue")
-    if "backlog" in c or ("remaining" in c and "contract" not in c and not ({"cost", "revenue"} & c)):
+    if "backlog" in c:
         add("backlog")
     if "risk" in c:
         add("risk")
@@ -282,7 +282,7 @@ def compose_canonical_fields(query: str) -> list[str]:
         add("start_date")
     if "end" in c:
         add("effective_end_date")
-    if "remaining" in c and ("contract" in c or "end" in c or "duration" in c):
+    if "remaining" in c and not ({"backlog", "cost", "revenue"} & c):
         add("days_remaining")
     return result
 

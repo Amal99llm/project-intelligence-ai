@@ -5,6 +5,7 @@ import pytest
 from modules.ai_engine import _answer_inner
 from modules.database import BacklogProject, get_session
 from modules.session_context import get_context, update_context
+from modules.semantic_dictionary import detect_requested_field
 
 
 @pytest.fixture()
@@ -63,6 +64,8 @@ def test_program_field_returns_program_not_project_code(seeded_db, today, no_ai)
 
 
 def test_remaining_duration_followup(seeded_db, today, no_ai):
+    for wording in ("كم باقي له؟", "كم باقي؟", "المدة الباقية"):
+        assert detect_requested_field(wording).canonical == "days_remaining"
     _name_researcher(seeded_db)
     _send("remaining-duration", "اعطني ملخص مشروع الباحث", today)
     _send("remaining-duration", "متى ينتهي؟", today)
