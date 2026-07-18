@@ -7,6 +7,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
+import pytest
 from sqlalchemy import inspect
 
 from modules.database import Base, engine, init_db
@@ -29,6 +30,15 @@ def test_concurrent_init_attempts_are_serialized():
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda _: init_db(), range(16)))
     assert {"backlog_projects", "audit_log"}.issubset(inspect(engine).get_table_names())
+
+
+def test_init_db_does_not_suppress_real_database_failures(monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("storage is read-only")
+
+    monkeypatch.setattr(Base.metadata, "create_all", fail)
+    with pytest.raises(RuntimeError, match="storage is read-only"):
+        init_db()
 
 
 def test_separate_initializer_processes_do_not_race(tmp_path):
