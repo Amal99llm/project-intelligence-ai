@@ -764,6 +764,7 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         row, src = _lookup_verified(code, today, projects, query)
         if not row:
             return verification.PROJECT_FALLBACK_MESSAGE, PROJECT_KPI, None, {}
+        row["_response_language"] = "ar" if any("\u0600" <= c <= "\u06ff" for c in query) else "en"
         return render_contract_answer(row, contract_request, today), PROJECT_KPI, src, {
             "active_project_code": code, "active_project_display_name": name,
             "last_project_code": code, "last_project_display_name": name,

@@ -44,26 +44,26 @@ def analyze_contract_request(query: str) -> ContractRequest | None:
     def with_contract(*values: str) -> list[str]:
         return [metric for metric in metrics if metric not in contract_metrics] + list(values)
 
-    contract_context = any(t in q for t in ("عقد", "قيمته", "قيمه", "القيمه", "القيمة", "cr", "تعديل"))
-    if any(t in q for t in ("العقد الاساسي", "العقد الأساسي", "قيمه اساسيه", "قيمة أساسية")):
+    contract_context = any(t in q for t in ("عقد", "قيمته", "قيمه", "القيمه", "القيمة", "cr", "تعديل", "contract", "amendment"))
+    if any(t in q for t in ("العقد الاساسي", "العقد الأساسي", "قيمه اساسيه", "قيمة أساسية", "base contract value")):
         metrics = with_contract("contract_value")
-    elif any(t in q for t in ("قيمه التعديلات", "قيمة التعديلات", "قيمه ال cr", "قيمة الـ cr", "كم cr")):
+    elif any(t in q for t in ("قيمه التعديلات", "قيمة التعديلات", "قيمه ال cr", "قيمة الـ cr", "كم cr", "contract amendments", "how much are the amendments")):
         metrics = with_contract("amendment_crs")
     elif _has(q, "هل صار عليه تعديل", "هل عليه تعديلات"):
         metrics = with_contract("amendment_crs")
-    elif any(t in q for t in ("بعد التعديلات", "القيمه الاجماليه", "القيمة الإجمالية")):
+    elif any(t in q for t in ("بعد التعديلات", "القيمه الاجماليه", "القيمة الإجمالية", "total after cr", "total after amendments")):
         metrics = with_contract("contract_value", "amendment_crs", "total_contract_value")
     elif contract_context and any(t in q for t in ("كم قيمته", "قيمه العقد", "قيمة العقد", "قيمه عقده", "قيمة عقده",
                                                     "عقده بكم", "قيمه المشروع", "قيمة المشروع")):
         metrics = with_contract("total_contract_value")
 
-    if any(t in q for t in ("كم باقي", "باقي له", "باقي عليه", "باقي على", "قرب يخلص", "باقي كثير")):
+    if any(t in q for t in ("كم باقي", "باقي له", "باقي عليه", "باقي على", "قرب يخلص", "باقي كثير", "time is left", "time left", "remaining time", "how much remaining")):
         return ContractRequest(tuple(metrics), "remaining")
-    if any(t in q for t in ("كم مده", "كم مدة", "كم مدته", "من البدايه للنهايه", "من البداية للنهاية")):
+    if any(t in q for t in ("كم مده", "كم مدة", "كم مدته", "من البدايه للنهايه", "من البداية للنهاية", "contract duration", "how long is the contract")):
         return ContractRequest(tuple(metrics), "duration")
     if any(t in q for t in ("كم له شغال", "من متى شغال")):
         return ContractRequest(tuple(metrics), "elapsed")
-    if any(t in q for t in ("هل انتهى", "هل انتها", "العقد منتهي", "العقد ساري", "قرب ينتهي", "يحتاج تجديد")):
+    if any(t in q for t in ("هل انتهى", "هل انتها", "العقد منتهي", "العقد ساري", "قرب ينتهي", "يحتاج تجديد", "has it expired", "close to expiry", "close to expiring")):
         return ContractRequest(tuple(metrics), "expiry")
     if _has(q, "تعديل على تاريخ", "تعديل على النهايه", "تعديل على النهاية"):
         return ContractRequest(tuple(metrics), "amendment")
@@ -109,6 +109,27 @@ def render_contract_answer(project: dict, request: ContractRequest, today: date)
     days_remaining = project.get("days_remaining")
     if days_remaining is None and end:
         days_remaining = (end - today).days
+
+    # Metric execution is shared; only the final wording follows the user's
+    # language. The orchestrator attaches this flag for English turns.
+    english = bool(project.get("_response_language") == "en")
+    name = project.get("project_name_en") or project.get("project_name_ar") or project.get("project_code")
+    if english:
+        if request.operation == "remaining":
+            return ("No valid end date is recorded for this project." if end is None else
+                    f"{name} has {int(days_remaining)} days remaining, ending on {end.isoformat()}.")
+        if request.operation == "duration":
+            return ("Valid start and end dates are not both recorded." if not start or not end else
+                    f"The contract duration is {(end - start).days} days, from {start.isoformat()} to {end.isoformat()}.")
+        if request.operation == "expiry":
+            return ("No valid end date is recorded for this project." if end is None else
+                    (f"The contract expired {abs(int(days_remaining))} days ago." if days_remaining < 0 else f"The contract expires in {int(days_remaining)} days."))
+        if request.operation == "amendment":
+            amended = project.get("amended_end_date")
+            return (f"The amended end date is {amended}." if amended else "No amended end date is recorded.")
+        labels = {"contract_value": "Base contract value", "amendment_crs": "Contract amendments", "total_contract_value": "Total contract value",
+                  "start_date": "Start date", "effective_end_date": "Effective end date", "days_remaining": "Days remaining"}
+        return "\n".join(f"{labels.get(metric, metric)}: {_money(project.get(metric) or 0, False) if metric in {'contract_value','amendment_crs','total_contract_value'} else project.get(metric)}." for metric in request.metrics)
 
     if request.operation == "remaining":
         if end is None:
