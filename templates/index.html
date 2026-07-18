@@ -403,6 +403,7 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
 .portfolio-state{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.state-item{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:11px}.state-item i{width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}.state-item span{font-size:10px;color:var(--text2)}.state-item strong{display:block;font-size:18px;color:var(--text)}
 .risk-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px 15px 0}.risk-stat{padding:9px 11px;border:1px solid var(--border);background:var(--surface2);border-radius:10px;display:flex;align-items:center;justify-content:space-between}.risk-stat span{font-size:10.5px;color:var(--text2)}.risk-stat strong{font-size:17px}
 .executive-actions{margin-bottom:10px}.actions-list{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.action-item{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface2)}.action-title{font-weight:650;margin-bottom:7px}.action-metrics{font-size:10.5px;color:var(--text2);display:grid;gap:2px;margin-bottom:9px}.action-btn{border:1px solid var(--border2);background:var(--blue-dim);color:var(--light-blue);padding:5px 10px;border-radius:8px;font:inherit;cursor:pointer}
+.value-chart-head{display:flex;align-items:center;justify-content:space-between;padding:0 15px 8px;color:var(--text3);font-size:9.5px}.value-chart-head span:last-child{color:var(--purple);font-weight:650}
 .filter-group{display:flex;align-items:center;gap:5px;padding-right:7px;border-right:1px solid var(--border)}.filter-label{font-size:9.5px;color:var(--text3);white-space:nowrap}.exec-select{background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;padding:5px 8px;font:inherit;font-size:10.5px;outline:none}
 .det-hero{display:flex;align-items:center;justify-content:space-between;gap:20px}.det-identity{min-width:0}.det-score{min-width:220px}.det-tabs{display:flex;gap:5px;margin:0 0 10px;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:12px;position:sticky;top:-18px;z-index:3}.det-tab{flex:1;border:0;background:transparent;color:var(--text2);font:inherit;padding:8px;border-radius:8px;cursor:pointer}.det-tab.on{background:linear-gradient(135deg,var(--purple),var(--blue));color:#fff}.det-pane{display:none}.det-pane.on{display:block}.mini-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.mini-kpi{padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px}.mini-kpi span{font-size:10px;color:var(--text3);display:block}.mini-kpi strong{font-size:15px}.project-waterfall{height:300px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px}.ai-analysis{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--surface2) 84%,var(--purple) 16%));border:1px solid var(--border2);border-radius:var(--r);padding:18px}.ai-analysis h3{margin-bottom:10px}.ai-analysis ul{padding-right:18px;color:var(--text2)}
 .upl-types{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px}.upl-type{border:1px solid var(--border);background:var(--surface2);color:var(--text2);border-radius:10px;padding:9px 6px;font:inherit;font-size:10.5px;cursor:pointer}.upl-type.on{border-color:var(--blue);background:var(--blue-dim);color:var(--light-blue)}.upl-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.upl-meta div{background:var(--surface2);border-radius:9px;padding:8px;font-size:10px;color:var(--text3)}.upl-meta strong{display:block;color:var(--text);font-size:12px}
@@ -494,7 +495,7 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
       <section class="overview-primary">
         <article class="card overview-card overview-featured">
           <div class="card-h"><div><div class="card-kicker">صنّاع قيمة المحفظة</div><div class="card-title">أهم المشاريع تأثيراً على الربحية</div><div class="card-sub">أعلى 5 مشاريع حسب صافي الربح — من المشاريع التي تصنع قيمة المحفظة؟</div></div></div>
-          <div class="card-b"><div class="chart-h" style="height:250px" id="rcpWrap"></div></div>
+          <div class="value-chart-head"><span>المشروع وترتيبه</span><span>صافي الربح · هامش الربح</span></div><div class="card-b" style="padding-top:0"><div class="chart-h" style="height:280px" id="rcpWrap"></div></div>
         </article>
         <div class="overview-side">
           <article class="card overview-card">
@@ -523,8 +524,6 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
           <div class="card-b"><div class="rm" id="riskMatrix"></div></div>
         </article>
       </section>
-
-      <section class="card executive-actions"><div class="card-h"><div><div class="card-kicker">أولوية المتابعة</div><div class="card-title">مشاريع تحتاج متابعة</div><div class="card-sub">المشاريع التي تظهر مؤشرات مالية أو تشغيلية تستدعي الانتباه</div></div></div><div class="card-b actions-list" id="executiveActions"></div></section>
 
       <!-- Projects table preview -->
       <div class="tbl-card overview-table">
@@ -821,7 +820,7 @@ async function submitUpload(){
 /* ══ RENDER ALL ══ */
 function renderAll(){
   renderKPIs();renderStatusBars();renderCharts();
-  renderExpiryList();renderRiskMatrix();renderExecutiveActions();
+  renderExpiryList();renderRiskMatrix();
   renderTbl(DATA);renderPrj();renderTL();renderFin();renderQuality();updateTicker();
   $('sideProjectCount').textContent=DATA.length.toLocaleString('ar-SA');
   $('uploadProjectCount').textContent=DATA.length.toLocaleString('ar-SA');
@@ -911,15 +910,15 @@ function renderCharts(){
   const p=DATA,c=gc();
 
   /* Grouped portfolio financial bars */
-  const t8=[...p].sort((a,b)=>(b.net_profit||0)-(a.net_profit||0)).slice(0,5);
-  const ec1=initEC('rcpWrap','250px');
+  const t8=[...p].sort((a,b)=>(b.net_profit||0)-(a.net_profit||0)).slice(0,5).reverse();
+  const ec1=initEC('rcpWrap','280px');
   if(ec1)ec1.setOption({backgroundColor:'transparent',...chartMotion,
     tooltip:chartTip(ps=>{const project=t8[ps[0]?.dataIndex];return`<div style="min-width:190px"><b style="font-size:12px">${projectName(project)}</b><div style="color:${c.text};margin:3px 0 6px">${project?.project_code||''}</div><div>الإيرادات <b style="color:${ELM.revenue};float:left">${fmtN(project?.total_revenue)} ريال</b></div><div>التكاليف <b style="color:${ELM.cost};float:left">${fmtN(project?.total_cost)} ريال</b></div><div>صافي الربح <b style="color:${ELM.profit};float:left">${fmtN(project?.net_profit)} ريال</b></div><div>هامش الربح <b style="color:${ELM.profit};float:left">${fmtPct(project?.profit_pct||0)}</b></div></div>`}),
     legend:{show:false},
-    grid:{top:36,bottom:52,left:8,right:12,containLabel:true},
-    xAxis:{type:'category',data:t8.map(projectName),axisLabel:{color:c.text,fontSize:9,rotate:18,width:72,overflow:'truncate'},axisLine:{lineStyle:{color:c.grid}},axisTick:{show:false}},
-    yAxis:{type:'value',axisLabel:{color:c.text,fontSize:9,formatter:v=>fmtN(v)},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false}},
-    series:[{name:'صافي الربح',type:'bar',data:t8.map(x=>x.net_profit||0),itemStyle:{color:ELM.profit,borderRadius:[5,5,0,0]},barMaxWidth:32,label:{show:true,position:'top',formatter:p=>fmtN(p.value),color:c.text,fontSize:9}}]
+    grid:{top:8,bottom:12,left:12,right:135,containLabel:true},
+    xAxis:{type:'value',axisLabel:{show:false},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false},axisTick:{show:false}},
+    yAxis:{type:'category',data:t8.map((x,i)=>`${5-i}. ${projectName(x)}`),axisLabel:{color:c.text,fontSize:10,width:145,overflow:'truncate',fontWeight:550},axisLine:{show:false},axisTick:{show:false}},
+    series:[{name:'صافي الربح',type:'bar',data:t8.map((x,i)=>({value:x.net_profit||0,itemStyle:{color:i===4?ELM.profit:`rgba(111,74,203,${.46+i*.11})`,borderRadius:[0,7,7,0]}})),barWidth:18,showBackground:true,backgroundStyle:{color:'rgba(174,143,213,.055)',borderRadius:7},label:{show:true,position:'right',distance:10,formatter:param=>{const project=t8[param.dataIndex];return`{value|${fmtN(param.value)} ريال}  {margin|${fmtPct(project.profit_pct||0)}}`;},rich:{value:{color:c.text,fontSize:10,fontWeight:700},margin:{color:ELM.healthy,fontSize:9,fontWeight:650,backgroundColor:'rgba(61,166,109,.12)',padding:[3,6],borderRadius:8}}}}]
   });
   bindChartDetails(ec1,t8);
 
@@ -1048,11 +1047,6 @@ function renderRiskMatrix(){
     }))
   });
   if(ec){ec.off('click');ec.on('click',event=>{if(event.data?.projectCode)openDetail(event.data.projectCode);});}
-}
-
-function renderExecutiveActions(){
-  const items=[...DATA].map(p=>({p,score:Math.abs(Math.min(0,p.net_profit||0))+(p.risk||0)+(p._daysRem!==null&&p._daysRem<0?Math.abs(p._daysRem)*100000:0)})).sort((a,b)=>b.score-a.score).slice(0,3);
-  $('executiveActions').innerHTML=items.map(({p})=>{const reasons=[];if((p.risk||0)>0)reasons.push('مخاطر مالية مرتفعة');if((p.net_profit||0)<0)reasons.push('ربحية سالبة');if(p._daysRem!==null&&p._daysRem<0)reasons.push(`تأخير ${Math.abs(p._daysRem)} يوم`);if((p.progress_completed||0)<50)reasons.push('نسبة إنجاز منخفضة');return`<article class="action-item"><div class="action-title">⚠ ${projectName(p)}</div><div class="action-metrics"><span>سبب المتابعة</span>${reasons.slice(0,3).map(r=>`<strong>• ${r}</strong>`).join('')||'<strong>• متابعة المؤشرات التشغيلية</strong>'}</div><button class="action-btn" data-code="${escAttr(p.project_code)}">عرض التفاصيل</button></article>`;}).join('')||'<p style="color:var(--text3)">لا توجد مشاريع تتطلب متابعة حالياً</p>';
 }
 
 /* ══ TABLES ══ */
