@@ -2,6 +2,11 @@ from modules.ai_engine import _answer_inner
 from modules.executive_intelligence import (
     AnalysisType, classify_executive_request, evaluate_project_attention,
 )
+from modules.semantic_dictionary import normalize_digits
+
+
+def test_arabic_and_persian_digits_share_one_normalizer():
+    assert normalize_digits("أقل من ٥٪ خلال ٩٠ يوم، رقم ۲") == "أقل من 5٪ خلال 90 يوم، رقم 2"
 
 
 def test_executive_classifier_produces_controlled_requests():

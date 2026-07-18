@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from zoneinfo import ZoneInfo
 
 from modules.database import log_query
 from modules import session_context
@@ -48,6 +47,7 @@ from modules.executive_analysis import format_attention_summary, project_attenti
 from modules import query_builder, query_executor, query_schema, response_formatter, verification
 from modules.query_planner import build_plan
 from modules.executive_intelligence import classify_executive_request, execute_executive_request
+from modules.time_utils import riyadh_today
 
 logger = logging.getLogger(__name__)
 
@@ -831,7 +831,7 @@ def answer(query: str, user_id: str = "anonymous",
     query = query.strip()[:2000]
     if not query:
         return {"answer": "من فضلك اكتب سؤالك.", "query_type": "none"}
-    today = datetime.now(ZoneInfo("Asia/Riyadh")).date()
+    today = riyadh_today()
     session_id = session_id or "no-session"
     ctx = session_context.get_context(session_id)
     try:
@@ -861,7 +861,7 @@ def answer(query: str, user_id: str = "anonymous",
 
 
 def generate_report(report_type: str) -> str:
-    today = datetime.now(ZoneInfo("Asia/Riyadh")).date()
+    today = riyadh_today()
     try:
         projects = fetch_enriched_projects(today=today)
         if not projects:

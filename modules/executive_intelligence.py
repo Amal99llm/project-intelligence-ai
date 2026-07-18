@@ -10,6 +10,7 @@ from typing import Any
 from modules.kpi_calculator import calculate_executive_kpis
 from modules.response_formatter import _money, format_arabic_date
 from modules.semantic_dictionary import normalize_text
+from modules.time_utils import riyadh_today
 
 
 class AnalysisType(str, Enum):
@@ -108,7 +109,7 @@ def classify_executive_request(query: str) -> ExecutiveRequest | None:
 
 
 def evaluate_project_attention(project: dict[str, Any], today: date | None = None) -> AttentionAssessment:
-    today = today or date.today()
+    today = today or riyadh_today()
     reasons: list[tuple[float, str]] = []
     days, profit, margin = _num(project.get("days_remaining")), _num(project.get("net_profit")), _num(project.get("profit_pct"))
     risk, variance = _num(project.get("risk")), _num(project.get("variance"))

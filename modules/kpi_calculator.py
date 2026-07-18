@@ -20,6 +20,7 @@ Profit/loss source (decision recorded here, single place):
 from __future__ import annotations
 
 from datetime import date, datetime
+from modules.time_utils import riyadh_today
 from typing import Any, Iterable, Mapping
 
 PROFIT_LOSS_SOURCE = "stored_pl"  # "stored_pl" | "computed"
@@ -99,7 +100,7 @@ def calculate_executive_kpis(
     - Data quality: completeness of code, name, status, effective end date,
       and project manager.
     """
-    today = today or date.today()
+    today = today or riyadh_today()
 
     # project_code is the database's unique project identifier.  Deduplicating
     # here prevents accidental row multiplication from inflating any KPI.

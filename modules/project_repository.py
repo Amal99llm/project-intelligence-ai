@@ -18,6 +18,7 @@ from typing import Any
 
 from modules.database import BacklogProject, get_session
 from modules.kpi_calculator import normalize_progress, project_financials
+from modules.time_utils import riyadh_today
 
 
 def _to_date(val: Any) -> date | None:
@@ -48,7 +49,7 @@ def fetch_enriched_projects(today: date | None = None) -> list[dict[str, Any]]:
     KPI Registry and structured query executor rely on. Stored profit
     fields on the row are never used — profit is always recalculated from
     revenue and cost here, once."""
-    today = today or date.today()
+    today = today or riyadh_today()
     with get_session() as session:
         rows = session.query(BacklogProject).all()
         projects = []

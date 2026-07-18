@@ -37,6 +37,7 @@ if sys.platform == "win32":
 import bleach
 from flask import Flask, render_template, request, jsonify, session as flask_session, Response
 from datetime import date
+from modules.time_utils import riyadh_today
 
 import config
 from modules.database    import init_db
@@ -279,7 +280,7 @@ def api_projects():
     from modules.project_repository import fetch_enriched_projects
 
     try:
-        today = date.today()
+        today = riyadh_today()
         projects = fetch_enriched_projects(today=today)
         metrics = calculate_executive_kpis(projects, today=today)
         return jsonify({"projects": projects, "count": metrics["total_projects"], "metrics": metrics})

@@ -32,10 +32,14 @@ _CONTROLLED_ARABIC_TYPOS = {
 }
 
 
+def normalize_digits(value: Any) -> str:
+    """Convert Arabic-Indic and Persian digits without changing other text."""
+    return unicodedata.normalize("NFKC", str(value or "")).translate(_DIGITS)
+
+
 def normalize_text(value: Any, *, fold_ta_marbuta: bool = True) -> str:
     """Conservative Arabic/English normalization used only for detection."""
-    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
-    text = text.translate(_DIGITS)
+    text = normalize_digits(value).casefold()
     text = _DIACRITICS.sub("", text).translate(_LETTERS)
     if fold_ta_marbuta:
         text = text.replace("ة", "ه")
