@@ -424,23 +424,43 @@ def _handle_list_followup(query: str, u: Understanding, ctx: dict, projects: lis
 # ── Comparison handler ────────────────────────────────────────────────────────
 
 def _handle_comparison(query: str, today: date, ctx: dict, projects: list, upd: dict) -> tuple:
-    from modules.comparison_engine import resolve_comparison_projects, format_comparison
+    from modules.comparison_engine import (
+        resolve_comparison_projects, resolve_comparison_entities, format_comparison,
+        format_comparison_winner, comparison_field, is_comparison_followup,
+    )
     pair = resolve_comparison_projects(query, projects)
+    if len(pair) != 2 and is_comparison_followup(query):
+        codes = ctx.get("comparison_project_ids") or (ctx.get("last_comparison") or {}).get("codes") or []
+        by_code = {project.get("project_code"): project for project in projects}
+        pair = [by_code[code] for code in codes if code in by_code]
     if len(pair) == 2:
-        text = format_comparison(pair, query)
+        field = comparison_field(query)
+        text = format_comparison_winner(pair, query, field) if is_comparison_followup(query) else format_comparison(pair, query)
         codes = [p.get("project_code") for p in pair]
         names = [p.get("project_name_ar") or p.get("project_code") for p in pair]
         upd.update({
             "last_result_type": "comparison",
-            "last_comparison": {"codes": codes, "field": None},
+            "last_comparison": {"codes": codes, "field": field},
+            "comparison_project_ids": codes,
             "active_project_code": codes[0],
             "active_project_display_name": names[0],
             "last_project_code": codes[0],
         })
         return text, PROJECT_COMPARISON, None, upd
-    text, src, lu = _resolve_and_respond(query, today, projects, ctx)
-    upd.update(lu)
-    return text, PROJECT_SUMMARY, src, upd
+    multiple = resolve_comparison_entities(query, projects)
+    resolved_codes = [r.matches[0].record.project_code for r in multiple.resolutions if r.all_matched]
+    unresolved = next((r for r in multiple.resolutions if not r.all_matched), None)
+    if unresolved and unresolved.matches:
+        candidates = [{"project_code": m.record.project_code,
+                       "display_name": m.record.official_ar or m.record.official_en or m.record.project_code}
+                      for m in unresolved.matches[:5]]
+        options = "\n".join(f"{i}. {item['display_name']}" for i, item in enumerate(candidates, 1))
+        return f"لقيت أكثر من مشروع قريب من الاسم:\n{options}\nأي واحد تقصد للمقارنة؟", PROJECT_COMPARISON, None, {
+            "pending_project_confirmation": {"candidates": candidates, "kind": "comparison", "resolved_codes": resolved_codes, "original_query": query},
+            "comparison_project_ids": resolved_codes,
+            "last_result_type": "comparison_pending",
+        }
+    return "لم أتمكن من حل طرفي المقارنة. اذكر اسمًا أوضح لكل مشروع.", PROJECT_COMPARISON, None, upd
 
 
 # ── Main orchestrator ─────────────────────────────────────────────────────────
@@ -719,6 +739,16 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
                 return verification.PROJECT_FALLBACK_MESSAGE, PROJECT_KPI, None, upd
             upd.update({"last_result_type": "project_kpi", "last_user_intent": request.operation})
             return render_contract_answer(row, request, today), PROJECT_KPI, src, upd
+        if kind == "comparison":
+            codes = list(pstate.get("resolved_codes") or []) + [code]
+            codes = list(dict.fromkeys(codes))
+            by_code = {project.get("project_code"): project for project in projects}
+            pair = [by_code[item] for item in codes if item in by_code]
+            if len(pair) == 2:
+                from modules.comparison_engine import format_comparison
+                upd.update({"comparison_project_ids": codes, "last_comparison": {"codes": codes, "field": None}, "last_result_type": "comparison"})
+                return format_comparison(pair, pstate.get("original_query") or query), PROJECT_COMPARISON, None, upd
+            return "اذكر المشروع الآخر لإكمال المقارنة.", PROJECT_COMPARISON, None, upd
         orig = pstate.get("original_query") or query
         orig_field = detect_requested_field(orig)
         row, src = _lookup_verified(code, today, projects, orig,

@@ -146,7 +146,7 @@ def comparison_field(query: str, fallback: str = "pl") -> str:
 def format_comparison_summary(projects: list[dict[str, Any]], query: str, current_field: str | None = None) -> str:
     """Concise verified summary of the active two-project comparison."""
     arabic = any("\u0600" <= char <= "\u06ff" for char in query)
-    names = [project.get("project_name_ar") or project.get("project_name_en") or project.get("project_code") for project in projects]
+    names = [(project.get("project_name_ar") if arabic else project.get("project_name_en")) or project.get("project_name_ar") or project.get("project_name_en") or project.get("project_code") for project in projects]
     fields = []
     for field in (current_field, "total_revenue", "total_cost", "pl", "profit_pct", "effective_end_date"):
         if field and field not in fields and all(_field_value(project, field) is not None for project in projects):
@@ -172,7 +172,7 @@ def format_comparison_summary(projects: list[dict[str, Any]], query: str, curren
 def format_comparison(projects: list[dict[str, Any]], query: str, field: str | None = None) -> str:
     arabic = any("\u0600" <= char <= "\u06ff" for char in query)
     fields = [field] if field else ["total_revenue", "total_cost", "pl", "profit_pct", "progress_completed"]
-    names = [project.get("project_name_ar") or project.get("project_name_en") or project.get("project_code") for project in projects]
+    names = [(project.get("project_name_ar") if arabic else project.get("project_name_en")) or project.get("project_name_ar") or project.get("project_name_en") or project.get("project_code") for project in projects]
     if arabic:
         header = f"| المؤشر | {names[0]} | {names[1]} |\n|---|---:|---:|"
         rows = []
@@ -198,7 +198,8 @@ def format_comparison_winner(projects: list[dict[str, Any]], query: str, field: 
         marker in normalized for marker in ("اقرب", "أقرب", "closer", "sooner", "nearest")
     )
     winner = min(available, key=lambda project: _field_value(project, field)) if lower_wins else max(available, key=lambda project: _field_value(project, field))
-    name = winner.get("project_name_ar") or winner.get("project_name_en") or winner.get("project_code")
+    name = ((winner.get("project_name_ar") if arabic else winner.get("project_name_en")) or
+            winner.get("project_name_ar") or winner.get("project_name_en") or winner.get("project_code"))
     label = FIELDS[field].label_ar if arabic else FIELDS[field].label_en
     value = _render_value(winner, field, arabic)
     if lower_wins:
