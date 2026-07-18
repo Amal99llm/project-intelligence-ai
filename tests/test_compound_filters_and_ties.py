@@ -25,3 +25,10 @@ def test_rank_limit_includes_all_projects_tied_at_boundary():
     rows = [{"project_code": "A", "net_profit": 10}, {"project_code": "B", "net_profit": 10}, {"project_code": "C", "net_profit": 5}]
     result = query_executor.execute(spec, projects=rows)
     assert [row["project_code"] for row in result["rows"]] == ["A", "B"]
+
+
+def test_arabic_digits_drive_portfolio_filters_and_limits():
+    margin = query_builder.build_query("وش المشاريع اللي هامشها أقل من ٥٪؟", "2026-07-15")
+    assert {"column": "profit_pct", "op": "<", "value": 5.0} in margin["filters"]
+    expiry = query_builder.build_query("وش المشاريع اللي تنتهي خلال ٩٠ يوم؟", "2026-07-15")
+    assert expiry["filters"][0]["value2"] == 90

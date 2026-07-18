@@ -197,6 +197,12 @@ def format_comparison_winner(projects: list[dict[str, Any]], query: str, field: 
     lower_wins = field in {"effective_end_date", "end_date", "amended_end_date", "days_remaining"} and any(
         marker in normalized for marker in ("اقرب", "أقرب", "closer", "sooner", "nearest")
     )
+    left_value, right_value = (_field_value(project, field) for project in available)
+    if left_value == right_value:
+        label = FIELDS[field].label_ar if arabic else FIELDS[field].label_en
+        value = _render_value(available[0], field, arabic)
+        return (f"المشروعان متعادلين في {label} بقيمة {value}." if arabic else
+                f"Both projects are tied on {label} at {value}.")
     winner = min(available, key=lambda project: _field_value(project, field)) if lower_wins else max(available, key=lambda project: _field_value(project, field))
     name = ((winner.get("project_name_ar") if arabic else winner.get("project_name_en")) or
             winner.get("project_name_ar") or winner.get("project_name_en") or winner.get("project_code"))

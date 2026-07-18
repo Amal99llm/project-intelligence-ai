@@ -2,6 +2,7 @@ from datetime import date
 
 from modules.contract_semantics import analyze_contract_request, render_contract_answer
 from modules.semantic_dictionary import detect_requested_field
+from modules.project_repository import _to_date
 
 
 def test_field_registry_resolves_arabic_english_and_mixed_business_fields():
@@ -36,3 +37,8 @@ def test_missing_end_date_is_not_rendered_as_zero_days():
     answer = render_contract_answer(project, analyze_contract_request("How much time is left?"), date(2026, 7, 15))
     assert answer == "No valid end date is recorded for this project."
     assert "0 days" not in answer
+
+
+def test_all_invalid_date_shapes_remain_missing():
+    for value in (None, float("nan"), "", "invalid text", 0):
+        assert _to_date(value) is None

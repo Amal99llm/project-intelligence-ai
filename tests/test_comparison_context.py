@@ -1,4 +1,5 @@
 from modules.ai_engine import _handle_comparison
+from modules.comparison_engine import format_comparison_winner
 
 
 PROJECTS = [
@@ -23,3 +24,9 @@ def test_failed_comparison_never_degrades_to_single_project_summary(today):
     text, kind, _, _ = _handle_comparison("compare unknown with First", today, {}, PROJECTS, {})
     assert kind == "project_comparison"
     assert "طرفي المقارنة" in text or "أي واحد تقصد" in text
+
+
+def test_comparison_tie_is_reported_without_arbitrary_winner():
+    tied = [dict(PROJECTS[0], profit_pct=8), PROJECTS[1]]
+    answer = format_comparison_winner(tied, "which has the higher margin?", "profit_pct")
+    assert "Both projects are tied" in answer
