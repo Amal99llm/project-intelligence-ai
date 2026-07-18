@@ -39,6 +39,7 @@ from modules.rag_engine import answer_contract_query, ContractQueryError
 from modules.semantic_dictionary import (
     FIELDS, detect_requested_field, detect_semantic_intent,
     detect_requested_fields, detect_small_talk, is_methodology_question,
+    CONCEPT_LEXICON, extract_field_concepts,
 )
 from modules.response_formatter import format_delay_status, format_project_metrics
 from modules.contract_semantics import analyze_contract_request, render_contract_answer
@@ -136,7 +137,7 @@ _ROW_FIELDS = (
 def _trim(p): return {k: p.get(k) for k in _ROW_FIELDS}
 
 
-def _has_explicit_project_reference(query: str, fields: list) -> bool:
+def _has_explicit_project_reference(query: str, fields: list, projects: list | None = None) -> bool:
     """Return whether content remains after known field/question language.
 
     Field resolution deliberately runs first. A metric phrase such as
@@ -148,12 +149,31 @@ def _has_explicit_project_reference(query: str, fields: list) -> bool:
         for alias in sorted(field.normalized_aliases, key=len, reverse=True):
             if alias:
                 normalized = normalized.replace(alias, " ")
+    # Composed field wording may intentionally not be an alias (for example
+    # contract + base). Remove its constituent meaning atoms as well.
+    for concept in extract_field_concepts(query):
+        for term in sorted(CONCEPT_LEXICON[concept], key=len, reverse=True):
+            normalized = normalized.replace(normalize_project_text(term), " ")
     stop = {normalize_project_text(value) for value in (
         "كم", "وش", "ايش", "ما", "هو", "هي", "اعطني", "عطني", "قيمة",
-        "what", "is", "the", "how", "much", "when", "does", "it", "project",
+        "ال", "what", "is", "the", "how", "much", "when", "does", "it", "project",
     )}
     residual = [token for token in normalized.split() if token not in stop and len(token) > 1]
-    return bool(residual)
+    if not residual:
+        return False
+    if projects is None:
+        return True
+    residual_tokens = set(residual)
+    for project in projects:
+        identities = (
+            project.get("project_code"), project.get("project_name_ar"),
+            project.get("project_name_en"), project.get("wbs"), project.get("wbs_pc"),
+        )
+        for identity in identities:
+            identity_tokens = {token for token in normalize_project_text(identity).split() if len(token) > 2}
+            if residual_tokens & identity_tokens:
+                return True
+    return False
 
 
 # ── Core verified lookup ──────────────────────────────────────────────────────
@@ -786,7 +806,7 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     # explicit current-turn entity therefore always outranks stale context.
     planning_projects = fetch_enriched_projects(today=today)
     plan = build_plan(query, planning_projects, ctx.get("active_project_code"))
-    explicit_entity = bool(plan.project_codes and extract_project_phrase(query))
+    explicit_entity = bool(plan.project_codes and _has_explicit_project_reference(query, initial_fields, planning_projects))
     if plan.is_compound and (explicit_entity or len(plan.project_codes) >= 2):
         planned = _execute_compound_plan(plan, query, today, planning_projects, ctx)
         if planned:
@@ -799,7 +819,7 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         projects = fetch_enriched_projects(today=today)
         # Known field language with an active project is a follow-up. Only
         # residual non-field content authorizes a new entity search.
-        explicit_reference = _has_explicit_project_reference(query, initial_fields)
+        explicit_reference = _has_explicit_project_reference(query, initial_fields, projects)
         resolution = resolve_project(query, projects) if explicit_reference else None
         logger.debug("contract routing: active_project=%r metrics=%s explicit_project=%s resolution=%s",
                      ctx.get("active_project_code"), contract_request.metrics, explicit_reference,

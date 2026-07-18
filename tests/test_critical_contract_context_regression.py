@@ -1,7 +1,10 @@
 from modules.ai_engine import _answer_inner, _has_explicit_project_reference
 from modules.database import BacklogProject, get_session
 from modules.session_context import get_context, update_context
-from modules.semantic_dictionary import detect_requested_field, detect_requested_fields
+from modules.semantic_dictionary import (
+    compose_canonical_fields, detect_requested_field, detect_requested_fields,
+    extract_field_concepts,
+)
 
 
 def _send(session_id, query, today):
@@ -10,11 +13,29 @@ def _send(session_id, query, today):
     return text, get_context(session_id)
 
 
-def test_field_registry_generates_metric_question_shapes():
+def test_field_semantics_compose_metric_meaning_before_entity_resolution():
     field = detect_requested_field("كم العقد الأساسي؟")
     assert field and field.canonical == "contract_value"
+    assert {"contract", "base"}.issubset(extract_field_concepts("وش كان العقد قبل التعديلات؟"))
+    assert compose_canonical_fields("وش كان العقد قبل التعديلات؟")[0] == "contract_value"
     assert not _has_explicit_project_reference("كم العقد الأساسي؟", [field])
     assert _has_explicit_project_reference("كم قيمة عقد الباحث؟", detect_requested_fields("كم قيمة عقد الباحث؟"))
+
+
+def test_semantic_composition_handles_unlisted_phrasings():
+    cases = {
+        "what was the contract before amendments?": "contract_value",
+        "current contract amount including amendments": "total_contract_value",
+        "budgeted margin كم؟": "planned_pm_pct",
+        "actual profit كم؟": "pl",
+        "expected cost at completion": "etc_cost",
+        "prior years revenue": "previous_years_rev",
+        "current revenue": "revenue_current",
+        "كم باقي على مدة العقد؟": "days_remaining",
+    }
+    for query, expected in cases.items():
+        assert expected in compose_canonical_fields(query), query
+        assert detect_requested_field(query).canonical == expected, query
 
 
 def test_contract_followup_context_regression(seeded_db, today, monkeypatch):

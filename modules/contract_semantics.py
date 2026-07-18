@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from modules.semantic_dictionary import detect_requested_fields, normalize_text
+from modules.semantic_dictionary import detect_requested_fields, extract_field_concepts, normalize_text
 from modules.response_formatter import _money, format_arabic_date, format_project_metrics
 
 
@@ -38,6 +38,7 @@ def parse_future_period_days(query: str) -> int | None:
 
 def analyze_contract_request(query: str) -> ContractRequest | None:
     q = normalize_text(query)
+    concepts = extract_field_concepts(query)
     metrics = [item.canonical for item in detect_requested_fields(query)]
     contract_metrics = {"contract_value", "amendment_crs", "total_contract_value"}
 
@@ -45,6 +46,8 @@ def analyze_contract_request(query: str) -> ContractRequest | None:
         return [metric for metric in metrics if metric not in contract_metrics] + list(values)
 
     contract_context = any(t in q for t in ("عقد", "قيمته", "قيمه", "القيمه", "القيمة", "cr", "تعديل", "contract", "amendment"))
+    if {"amendment", "end"}.issubset(concepts) and "value" not in concepts:
+        return ContractRequest(tuple(metric for metric in metrics if metric != "amendment_crs"), "amendment")
     if any(t in q for t in ("العقد الاساسي", "العقد الأساسي", "قيمه اساسيه", "قيمة أساسية", "base contract value")):
         metrics = with_contract("contract_value")
     elif any(t in q for t in ("قيمه التعديلات", "قيمة التعديلات", "قيمه ال cr", "قيمة الـ cr", "كم cr", "contract amendments", "how much are the amendments")):

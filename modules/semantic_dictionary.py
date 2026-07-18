@@ -69,15 +69,7 @@ class FieldDefinition:
     @property
     def normalized_aliases(self) -> tuple[str, ...]:
         values = (self.label_ar, self.label_en, *self.aliases, *self.saudi_aliases, *self.abbreviations)
-        normalized = tuple(dict.fromkeys(normalize_text(value) for value in values if value))
-        # Generate the two natural metric-question shapes for every field.
-        # Detection remains schema-driven instead of maintaining per-field
-        # lists of "كم X" and "X كم" phrases.
-        generated = tuple(
-            phrase for alias in normalized
-            for phrase in (alias, f"كم {alias}", f"{alias} كم", f"how much {alias}", f"what is the {alias}")
-        )
-        return tuple(dict.fromkeys(generated))
+        return tuple(dict.fromkeys(normalize_text(value) for value in values if value))
 
 
 def _f(canonical, source, ar, en, aliases=(), saudi=(), abbr=(), dtype="text", unit=None,
@@ -112,7 +104,6 @@ FIELD_DEFINITIONS = (
     _f("days_remaining", "Effective End Date", "الأيام المتبقية", "Days remaining", ("كم باقي عليه", "remaining days", "time left", "how much time is left", "remaining time"), ("وش باقي عليه",), dtype="days", calculated=True),
     _f("project_manager", "Project Manager Name", "مدير المشروع", "Project manager", ("المسؤول عن المشروع", "project manager", "pm name", "who manages", "who is the manager", "manager", "managed by"), ("مديره", "مين مديره", "مين ماسكه", "ومديره"), default=True),
     _f("contract_value", "Contract Value", "قيمة العقد الأساسية", "Base contract value",
-       ("العقد الأساسي", "القيمة الأساسية للعقد", "original contract value", "base contract value"),
        dtype="money", unit="SAR", aggregate=True),
     _f("amendment_crs", "Amendment (CRs)", "تعديلات العقد", "Contract amendments", ("طلبات التغيير", "amendments", "crs"), dtype="money", unit="SAR", aggregate=True),
     _f("total_contract_value", "Total Contract Value", "إجمالي قيمة العقد", "Total contract value", ("قيمة العقد", "قيمة المشروع", "contract value", "total contract value", "about the contract"), ("عقده", "كم عقده", "وعقده", "وضع العقد", "عن العقد"), dtype="money", unit="SAR", aggregate=True, default=True),
@@ -201,8 +192,105 @@ def _alias_in_query(alias: str, normalized_query: str) -> bool:
     return False
 
 
+# Meaning atoms are intentionally smaller than sentences. Natural wording is
+# understood by composing a subject (contract/cost/revenue/...) with optional
+# qualifiers (base/planned/remaining/...). Direct aliases remain useful for
+# acronyms and source terminology, but do not carry the paraphrase burden.
+CONCEPT_LEXICON: dict[str, tuple[str, ...]] = {
+    "contract": ("عقد", "العقد", "contract"),
+    "value": ("قيمه", "القيمه", "value", "amount", "worth"),
+    "base": ("اساسي", "اساسيه", "اصلي", "اصليه", "قبل التعديلات", "before amendments", "base", "original"),
+    "amendment": ("تعديل", "تعديلات", "التعديلات", "طلبات التغيير", "amendment", "amendments", "change request", "crs", "cr"),
+    "after_amendments": ("بعد التعديلات", "شامل التعديلات", "after amendments", "after crs", "including amendments"),
+    "total": ("اجمالي", "الاجمالي", "كامل", "total", "overall"),
+    "current": ("حالي", "حاليه", "الفعلي", "فعلي", "current", "actual", "to date"),
+    "previous": ("السابق", "السابقة", "سنوات سابقه", "سنوات سابقة", "previous", "prior years"),
+    "remaining": ("متبقي", "المتبقي", "باقي", "remaining", "left"),
+    "planned": ("مخطط", "المخطط", "المخططه", "المخططة", "planned", "budgeted"),
+    "expected": ("متوقع", "المتوقع", "تقديري", "expected", "estimate", "forecast", "etc"),
+    "profit": ("ربح", "الربح", "خساره", "الخساره", "profit", "loss", "p&l", "pl"),
+    "margin": ("هامش", "الهامش", "نسبه الربح", "نسبة الربح", "margin", "pm%"),
+    "cost": ("تكلفه", "التكلفه", "تكاليف", "التكاليف", "مصروف", "cost", "costs", "expense"),
+    "revenue": ("ايراد", "الايراد", "ايرادات", "الايرادات", "دخل", "revenue", "income"),
+    "backlog": ("اعمال متبقيه", "الأعمال المتبقية", "باكلوق", "backlog"),
+    "risk": ("مخاطر", "المخاطر", "risk", "exposure"),
+    "progress": ("انجاز", "الانجاز", "تقدم", "التقدم", "progress", "completion"),
+    "start": ("بدايه", "البدايه", "بدا", "start", "commencement"),
+    "end": ("نهايه", "النهايه", "ينتهي", "يخلص", "end", "expiry", "expire", "finish"),
+    "duration": ("مده", "المده", "duration", "term"),
+}
+
+_NORMALIZED_CONCEPTS = {
+    concept: tuple(normalize_text(term) for term in terms)
+    for concept, terms in CONCEPT_LEXICON.items()
+}
+
+
+def extract_field_concepts(query: str) -> frozenset[str]:
+    normalized = normalize_text(query)
+    return frozenset(
+        concept for concept, terms in _NORMALIZED_CONCEPTS.items()
+        if any(_alias_in_query(term, normalized) for term in terms)
+    )
+
+
+def compose_canonical_fields(query: str) -> list[str]:
+    """Compose meaning atoms into canonical fields, most specific first."""
+    c = extract_field_concepts(query)
+    result: list[str] = []
+
+    def add(field: str) -> None:
+        if field not in result:
+            result.append(field)
+
+    if "contract" in c or "amendment" in c:
+        if "amendment" in c and "after_amendments" not in c and "base" not in c:
+            add("amendment_crs")
+        elif "base" in c:
+            add("contract_value")
+        elif "after_amendments" in c or "total" in c or "value" in c:
+            add("total_contract_value")
+    if "margin" in c:
+        add("planned_pm_pct" if "planned" in c else "profit_pct")
+    elif "profit" in c:
+        add("planned_profit" if "planned" in c else "pl")
+    if "cost" in c:
+        if "expected" in c:
+            add("etc_cost")
+        elif "planned" in c:
+            add("total_planned_cost")
+        elif "previous" in c:
+            add("previous_years_cost")
+        else:
+            add("total_cost")
+    if "revenue" in c:
+        if "expected" in c:
+            add("etc_revenue")
+        elif "previous" in c:
+            add("previous_years_rev")
+        elif "current" in c:
+            add("revenue_current")
+        else:
+            add("total_revenue")
+    if "backlog" in c or ("remaining" in c and "contract" not in c and not ({"cost", "revenue"} & c)):
+        add("backlog")
+    if "risk" in c:
+        add("risk")
+    if "progress" in c:
+        add("progress_completed")
+    if "start" in c:
+        add("start_date")
+    if "end" in c:
+        add("effective_end_date")
+    if "remaining" in c and ("contract" in c or "end" in c or "duration" in c):
+        add("days_remaining")
+    return result
+
+
 def detect_requested_fields(query: str) -> list[FieldDefinition]:
     normalized = normalize_text(query)
+    composed_names = compose_canonical_fields(query)
+    composed = [FIELDS[name] for name in composed_names if name in FIELDS]
     matches: list[tuple[int, FieldDefinition]] = []
     for field in FIELD_DEFINITIONS:
         best = max((len(alias) for alias in field.normalized_aliases if _alias_in_query(alias, normalized)), default=0)
@@ -212,7 +300,20 @@ def detect_requested_fields(query: str) -> list[FieldDefinition]:
     # Keep explicitly distinct fields, but suppress shorter aliases embedded
     # in a stronger semantic match (e.g. contract_value inside total_contract_value).
     strongest = matches[0][0] if matches else 0
-    selected = [field for length, field in matches if length >= strongest - 2] if matches else []
+    selected = list(composed)
+    composable_fields = {
+        "contract_value", "amendment_crs", "total_contract_value",
+        "planned_pm_pct", "profit_pct", "planned_profit", "pl",
+        "etc_cost", "total_planned_cost", "previous_years_cost", "total_cost",
+        "etc_revenue", "previous_years_rev", "revenue_current", "total_revenue",
+        "backlog", "risk", "progress_completed", "start_date",
+        "effective_end_date", "days_remaining",
+    }
+    selected.extend(
+        field for length, field in matches
+        if length >= strongest - 2 and field not in selected
+        and (not composed or field.canonical not in composable_fields)
+    )
     by_name = {field.canonical: field for field in FIELD_DEFINITIONS}
     # Coordinated questions explicitly request distinct concepts; preserving
     # both is more important than suppressing a shorter embedded alias.
