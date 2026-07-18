@@ -44,6 +44,7 @@ from modules.ingestion   import validate_upload, save_upload, read_excel, read_p
 from modules.processor   import process_excel_file, process_pdf_contract
 from modules.ai_engine   import answer
 from modules.data_loader import sync_all, get_last_sync_time
+from modules.llm_health import check_openai_client
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -67,6 +68,8 @@ init_db()
 
 for warning in config.validate_config():
     logger.warning("CONFIG WARNING: %s", warning)
+
+check_openai_client(logger)
 
 from scheduler import start_background_scheduler
 if os.environ.get("DISABLE_BACKGROUND_SCHEDULER", "").lower() not in {"1", "true", "yes"}:
