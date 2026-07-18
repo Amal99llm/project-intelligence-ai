@@ -18,6 +18,7 @@ def test_progress_gap_filter_is_deterministic():
     rows = [{"project_code": "A", "progress_gap": 30}, {"project_code": "B", "progress_gap": None}]
     result = query_executor.execute(spec, projects=rows)
     assert [row["project_code"] for row in result["rows"]] == ["A"]
+    assert result["exclusion_metadata"]["missing_effective_end_date"] == 2
 
 
 def test_rank_limit_includes_all_projects_tied_at_boundary():

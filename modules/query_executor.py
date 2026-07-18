@@ -164,6 +164,11 @@ def execute(spec: dict[str, Any], today: date | None = None,
         "aggregation": spec["aggregation"],
         "aggregation_result": aggregation_result,
         "aggregated_row_count": len(aggregated_rows) if spec["aggregation"] else None,
+        "exclusion_metadata": {
+            "missing_effective_end_date": sum(
+                1 for project in all_projects if project.get("effective_end_date") is None
+            ),
+        },
     }
     if f["op"] == "is_null":
         return value is None
