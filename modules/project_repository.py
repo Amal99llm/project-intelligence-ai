@@ -43,6 +43,16 @@ def _percentage(value: Any) -> float | None:
     return None if value is None else float(value) * 100
 
 
+def _descriptive_value(value: Any, project_code: str | None) -> Any:
+    """Reject a project identifier accidentally loaded into descriptive data."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or (project_code and text.casefold() == str(project_code).strip().casefold()):
+        return None
+    return value
+
+
 def fetch_enriched_projects(today: date | None = None) -> list[dict[str, Any]]:
     """Fetch every project row, enriched with the calculated fields
     (net_profit, profit_pct, effective_end_date, days_remaining) that the
@@ -54,6 +64,7 @@ def fetch_enriched_projects(today: date | None = None) -> list[dict[str, Any]]:
         rows = session.query(BacklogProject).all()
         projects = []
         for r in rows:
+            project_code = r.project_code
             end = _to_date(r.amended_end_date) or _to_date(r.end_date)
             days_rem = (end - today).days if end else None
             # Guard: if end date is suspiciously old (pre-2000) treat as no date
@@ -61,19 +72,19 @@ def fetch_enriched_projects(today: date | None = None) -> list[dict[str, Any]]:
                 end = None
                 days_rem = None
             project = {
-                "project_type": r.project_type,
-                "category": r.category,
-                "program": r.program,
-                "project_code": r.project_code,
+                "project_type": _descriptive_value(r.project_type, project_code),
+                "category": _descriptive_value(r.category, project_code),
+                "program": _descriptive_value(r.program, project_code),
+                "project_code": project_code,
                 "wbs_pc": r.wbs_pc,
                 "wbs": r.wbs,
                 "project_name_en": r.project_name_en,
                 "project_name_ar": r.project_name_ar,
                 "pc": r.pc,
                 "cc": r.cc,
-                "bu": r.bu,
-                "segment": r.segment,
-                "dept": r.dept,
+                "bu": _descriptive_value(r.bu, project_code),
+                "segment": _descriptive_value(r.segment, project_code),
+                "dept": _descriptive_value(r.dept, project_code),
                 "status": r.status,
                 "progress_completed": normalize_progress(r.progress_completed),
                 "start_date": str(r.start_date) if r.start_date else None,
@@ -126,8 +137,8 @@ def fetch_enriched_projects(today: date | None = None) -> list[dict[str, Any]]:
                 "etc_cost": _value(r.etc_cost),
                 "etc_revenue": _value(r.etc_revenue),
                 "customer_id": r.customer_id,
-                "project_manager": r.project_manager,
-                "officer_name": r.officer_name,
+                "project_manager": _descriptive_value(r.project_manager, project_code),
+                "officer_name": _descriptive_value(r.officer_name, project_code),
                 "support_document": r.support_document,
                 "note": r.note,
             }

@@ -24,11 +24,11 @@ def _send(session_id: str, query: str, today) -> tuple[str, str]:
     return text, kind
 
 
-def _name_researcher(seeded_db) -> None:
+def _name_researcher(seeded_db, program="برنامج الأبحاث الاجتماعية") -> None:
     with get_session() as db:
         row = db.query(BacklogProject).filter_by(project_code="PRJ-001").one()
         row.project_name_ar = "الباحث الاجتماعي الثاني"
-        row.program = "برنامج الأبحاث الاجتماعية"
+        row.program = program
         db.commit()
 
 
@@ -54,12 +54,12 @@ def test_confirmation_preserves_original_intent(seeded_db, today, no_ai):
 
 
 def test_program_field_returns_program_not_project_code(seeded_db, today, no_ai):
-    _name_researcher(seeded_db)
+    _name_researcher(seeded_db, program="PRJ-001")
     _send("program-field", "اعطني ملخص مشروع الباحث", today)
     response, kind = _send("program-field", "وش البرنامج؟", today)
     assert kind == "project_kpi"
-    assert "برنامج الأبحاث الاجتماعية" in response
     assert "PRJ-001" not in response
+    assert "غير متوفر" in response
 
 
 def test_remaining_duration_followup(seeded_db, today, no_ai):
