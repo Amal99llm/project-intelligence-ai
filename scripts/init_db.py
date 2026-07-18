@@ -1,7 +1,7 @@
 """Initialize the application database schema, then exit."""
 
-from modules.database import init_db
+from modules.schema_management import apply_schema_changes
 
 
 if __name__ == "__main__":
-    init_db()
+    apply_schema_changes()

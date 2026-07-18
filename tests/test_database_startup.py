@@ -10,35 +10,36 @@ import pandas as pd
 import pytest
 from sqlalchemy import inspect
 
-from modules.database import Base, engine, init_db
+from modules.database import Base, engine
 from modules.processor import process_backlog
 from modules.project_repository import fetch_enriched_projects
+from modules.schema_management import apply_schema_changes
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_init_db_is_idempotent():
+def test_schema_entry_point_is_idempotent():
     Base.metadata.drop_all(engine)
-    init_db()
-    init_db()
+    apply_schema_changes()
+    apply_schema_changes()
     assert {"backlog_projects", "audit_log"}.issubset(inspect(engine).get_table_names())
 
 
 def test_concurrent_init_attempts_are_serialized():
     Base.metadata.drop_all(engine)
     with ThreadPoolExecutor(max_workers=8) as pool:
-        list(pool.map(lambda _: init_db(), range(16)))
+        list(pool.map(lambda _: apply_schema_changes(), range(16)))
     assert {"backlog_projects", "audit_log"}.issubset(inspect(engine).get_table_names())
 
 
-def test_init_db_does_not_suppress_real_database_failures(monkeypatch):
+def test_schema_entry_point_does_not_suppress_real_database_failures(monkeypatch):
     def fail(*_args, **_kwargs):
         raise RuntimeError("storage is read-only")
 
     monkeypatch.setattr(Base.metadata, "create_all", fail)
     with pytest.raises(RuntimeError, match="storage is read-only"):
-        init_db()
+        apply_schema_changes()
 
 
 def test_separate_initializer_processes_do_not_race(tmp_path):
@@ -70,14 +71,14 @@ def test_application_import_has_no_schema_initialization():
     calls = [
         node for node in ast.walk(tree)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-        and node.func.id == "init_db"
+        and node.func.id in {"init_db", "apply_schema_changes"}
     ]
     imports = [
         alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
         and node.module == "modules.database" for alias in node.names
     ]
     assert not calls
-    assert "init_db" not in imports
+    assert not {"init_db", "apply_schema_changes"}.intersection(imports)
 
 
 def test_railway_starts_initializer_before_gunicorn():
@@ -90,7 +91,7 @@ def test_railway_starts_initializer_before_gunicorn():
 
 
 def test_project_loading_still_works_after_idempotent_initialization(seeded_db, today):
-    init_db()
+    apply_schema_changes()
     count = process_backlog(pd.DataFrame([{
         "Project Definition": "STARTUP-TEST-001",
         "Project Name (English)": "Startup Test Project",
