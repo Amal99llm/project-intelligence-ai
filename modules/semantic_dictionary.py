@@ -69,7 +69,15 @@ class FieldDefinition:
     @property
     def normalized_aliases(self) -> tuple[str, ...]:
         values = (self.label_ar, self.label_en, *self.aliases, *self.saudi_aliases, *self.abbreviations)
-        return tuple(dict.fromkeys(normalize_text(value) for value in values if value))
+        normalized = tuple(dict.fromkeys(normalize_text(value) for value in values if value))
+        # Generate the two natural metric-question shapes for every field.
+        # Detection remains schema-driven instead of maintaining per-field
+        # lists of "كم X" and "X كم" phrases.
+        generated = tuple(
+            phrase for alias in normalized
+            for phrase in (alias, f"كم {alias}", f"{alias} كم", f"how much {alias}", f"what is the {alias}")
+        )
+        return tuple(dict.fromkeys(generated))
 
 
 def _f(canonical, source, ar, en, aliases=(), saudi=(), abbr=(), dtype="text", unit=None,
@@ -103,7 +111,9 @@ FIELD_DEFINITIONS = (
     _f("effective_end_date", "Amended End Date CR / End Date", "تاريخ الانتهاء", "Effective end date", ("النهاية", "end date", "completion date", "when does it end", "when will it end", "when does it expire"), ("متى ينتهي", "متى يخلص", "ومتى ينتهي"), dtype="date", calculated=True, default=True),
     _f("days_remaining", "Effective End Date", "الأيام المتبقية", "Days remaining", ("كم باقي عليه", "remaining days", "time left", "how much time is left", "remaining time"), ("وش باقي عليه",), dtype="days", calculated=True),
     _f("project_manager", "Project Manager Name", "مدير المشروع", "Project manager", ("المسؤول عن المشروع", "project manager", "pm name", "who manages", "who is the manager", "manager", "managed by"), ("مديره", "مين مديره", "مين ماسكه", "ومديره"), default=True),
-    _f("contract_value", "Contract Value", "قيمة العقد الأساسية", "Base contract value", ("base contract value",), dtype="money", unit="SAR", aggregate=True),
+    _f("contract_value", "Contract Value", "قيمة العقد الأساسية", "Base contract value",
+       ("العقد الأساسي", "القيمة الأساسية للعقد", "original contract value", "base contract value"),
+       dtype="money", unit="SAR", aggregate=True),
     _f("amendment_crs", "Amendment (CRs)", "تعديلات العقد", "Contract amendments", ("طلبات التغيير", "amendments", "crs"), dtype="money", unit="SAR", aggregate=True),
     _f("total_contract_value", "Total Contract Value", "إجمالي قيمة العقد", "Total contract value", ("قيمة العقد", "قيمة المشروع", "contract value", "total contract value", "about the contract"), ("عقده", "كم عقده", "وعقده", "وضع العقد", "عن العقد"), dtype="money", unit="SAR", aggregate=True, default=True),
     _f("previous_years_rev", "Previous Years Revenue", "إيرادات السنوات السابقة", "Previous years revenue", ("previous revenue",), dtype="money", unit="SAR", aggregate=True),

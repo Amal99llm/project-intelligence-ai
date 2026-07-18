@@ -62,7 +62,7 @@ _ORDINAL_NORM = {normalize_project_text(k): v for k, v in {
     "1":0,"2":1,"3":2,"4":3,"5":4,
 }.items()}
 _YES_NORM = {normalize_project_text(w) for w in (
-    "نعم","ايوه","أيوه","إيه","ايه","يب","اه","آه","صح","صحيح","أكيد","اكيد","تمام","هو","هذا","بالضبط",
+    "نعم","ايوه","أيوه","إيه","ايه","اي","يب","اه","آه","صح","صحيح","أكيد","اكيد","تمام","هو","هذا","بالضبط",
     "yes","yeah","yep","correct","exactly","right","that's it","this one","y"
 )}
 _NO_NORM = {normalize_project_text(w) for w in (
@@ -134,6 +134,26 @@ _ROW_FIELDS = (
 
 
 def _trim(p): return {k: p.get(k) for k in _ROW_FIELDS}
+
+
+def _has_explicit_project_reference(query: str, fields: list) -> bool:
+    """Return whether content remains after known field/question language.
+
+    Field resolution deliberately runs first. A metric phrase such as
+    "العقد الأساسي" is therefore consumed as schema language, while
+    "قيمة عقد الباحث" retains "الباحث" and is eligible for entity resolution.
+    """
+    normalized = normalize_project_text(query)
+    for field in fields:
+        for alias in sorted(field.normalized_aliases, key=len, reverse=True):
+            if alias:
+                normalized = normalized.replace(alias, " ")
+    stop = {normalize_project_text(value) for value in (
+        "كم", "وش", "ايش", "ما", "هو", "هي", "اعطني", "عطني", "قيمة",
+        "what", "is", "the", "how", "much", "when", "does", "it", "project",
+    )}
+    residual = [token for token in normalized.split() if token not in stop and len(token) > 1]
+    return bool(residual)
 
 
 # ── Core verified lookup ──────────────────────────────────────────────────────
@@ -662,6 +682,9 @@ def _orchestrate(u: Understanding, query: str, today: date, ctx: dict, projects:
 
 def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     upd: dict = {}
+    initial_fields = detect_requested_fields(query)
+    logger.debug("turn routing: active_project=%r fields=%s", ctx.get("active_project_code"),
+                 [field.canonical for field in initial_fields])
 
     # Social conversation always outranks pending choices and project context.
     if detect_small_talk(query):
@@ -774,8 +797,13 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     contract_request = analyze_contract_request(query)
     if contract_request:
         projects = fetch_enriched_projects(today=today)
-        phrase = extract_project_phrase(query)
-        resolution = resolve_project(query, projects) if len(phrase) >= 3 else None
+        # Known field language with an active project is a follow-up. Only
+        # residual non-field content authorizes a new entity search.
+        explicit_reference = _has_explicit_project_reference(query, initial_fields)
+        resolution = resolve_project(query, projects) if explicit_reference else None
+        logger.debug("contract routing: active_project=%r metrics=%s explicit_project=%s resolution=%s",
+                     ctx.get("active_project_code"), contract_request.metrics, explicit_reference,
+                     getattr(resolution, "status", None))
         if resolution and resolution.status in {"ambiguous", "confirmation"}:
             pending_state = _pending_state(resolution, "contract_metrics", original_query=query)
             return format_resolution_prompt(resolution), PROJECT_KPI, None, {
