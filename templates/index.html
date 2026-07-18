@@ -398,9 +398,10 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
 /* Executive polish */
 .trust-panel{margin:8px 3px 10px;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.035);display:grid;gap:6px}
 .trust-row{display:flex;justify-content:space-between;gap:8px;font-size:9.5px;color:rgba(255,255,255,.4)}.trust-row strong{color:rgba(255,255,255,.76);font-weight:600;text-align:left}
-.kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.kpi{min-height:132px}.kpi.executive-health{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--surface2) 82%,var(--green) 18%))}
+.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.kpi{min-height:132px}.kpi.executive-health{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--surface2) 82%,var(--green) 18%))}
 .health-label{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650}.health-dot{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}
-.risk-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:12px 15px 0}.risk-stat{padding:9px 11px;border:1px solid var(--border);background:var(--surface2);border-radius:10px;display:flex;align-items:center;justify-content:space-between}.risk-stat span{font-size:10.5px;color:var(--text2)}.risk-stat strong{font-size:17px}
+.portfolio-state{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.state-item{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:11px}.state-item i{width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}.state-item span{font-size:10px;color:var(--text2)}.state-item strong{display:block;font-size:18px;color:var(--text)}
+.risk-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px 15px 0}.risk-stat{padding:9px 11px;border:1px solid var(--border);background:var(--surface2);border-radius:10px;display:flex;align-items:center;justify-content:space-between}.risk-stat span{font-size:10.5px;color:var(--text2)}.risk-stat strong{font-size:17px}
 .executive-actions{margin-bottom:10px}.actions-list{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.action-item{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface2)}.action-title{font-weight:650;margin-bottom:7px}.action-metrics{font-size:10.5px;color:var(--text2);display:grid;gap:2px;margin-bottom:9px}.action-btn{border:1px solid var(--border2);background:var(--blue-dim);color:var(--light-blue);padding:5px 10px;border-radius:8px;font:inherit;cursor:pointer}
 .filter-group{display:flex;align-items:center;gap:5px;padding-right:7px;border-right:1px solid var(--border)}.filter-label{font-size:9.5px;color:var(--text3);white-space:nowrap}.exec-select{background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;padding:5px 8px;font:inherit;font-size:10.5px;outline:none}
 .det-hero{display:flex;align-items:center;justify-content:space-between;gap:20px}.det-identity{min-width:0}.det-score{min-width:220px}.det-tabs{display:flex;gap:5px;margin:0 0 10px;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:12px;position:sticky;top:-18px;z-index:3}.det-tab{flex:1;border:0;background:transparent;color:var(--text2);font:inherit;padding:8px;border-radius:8px;cursor:pointer}.det-tab.on{background:linear-gradient(135deg,var(--purple),var(--blue));color:#fff}.det-pane{display:none}.det-pane.on{display:block}.mini-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.mini-kpi{padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px}.mini-kpi span{font-size:10px;color:var(--text3);display:block}.mini-kpi strong{font-size:15px}.project-waterfall{height:300px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px}.ai-analysis{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--surface2) 84%,var(--purple) 16%));border:1px solid var(--border2);border-radius:var(--r);padding:18px}.ai-analysis h3{margin-bottom:10px}.ai-analysis ul{padding-right:18px;color:var(--text2)}
@@ -460,7 +461,7 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
     <div class="tb-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg><input placeholder="ابحث في المشاريع..." id="globalSearch" oninput="globalFilter()"/></div>
     <div class="tb-actions">
       <div class="tb-btn tb-notif"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
-      <button class="tb-sync" onclick="openUpload()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>تحديث البيانات</button>
+      <button class="tb-sync" onclick="openUpload()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>تحديث بيانات المحفظة</button>
       <button class="tb-sync" onclick="syncData()"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-9 9m0-18a9 9 0 0 1 9 9M3 12a9 9 0 0 0 9 9m0-18a9 9 0 0 0-9 9"/><path d="m15 9 3-3-3-3M9 15l-3 3 3 3"/></svg>تحديث</button>
     </div>
   </div>
@@ -487,6 +488,7 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
 
     <!-- ══ OVERVIEW PAGE ══ -->
     <div class="page active" id="page-overview">
+      <section class="card" style="margin-bottom:12px"><div class="card-h"><div><div class="card-kicker">ملخص تنفيذي</div><div class="card-title">حالة المحفظة</div><div class="card-sub">قراءة مباشرة مبنية على الربحية الفعلية للمشاريع</div></div></div><div class="card-b portfolio-state" id="portfolioState"></div></section>
       <section class="kpi-grid" id="kpiGrid" aria-label="مؤشرات الأداء الرئيسية"></section>
 
       <section class="overview-primary">
@@ -516,13 +518,13 @@ body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg
           <div class="card-b"><div class="chart-h" style="height:215px" id="blWrap"></div></div>
         </article>
         <article class="card overview-card overview-risk">
-          <div class="card-h"><div><div class="card-kicker">رصد المخاطر</div><div class="card-title">خريطة المخاطر التنفيذية</div><div class="card-sub">الاحتمالية × الأثر لكل مشروع — انقر على أي نقطة للتفاصيل والإجراء المقترح</div></div></div>
+          <div class="card-h"><div><div class="card-kicker">رصد المخاطر المالية</div><div class="card-title">المشاريع الأعلى تعرضاً للمخاطر</div><div class="card-sub">مؤشر المخاطر المالية حسب قيمة المخاطر المسجلة لكل مشروع</div></div></div>
           <div class="risk-summary" id="riskSummary"></div>
           <div class="card-b"><div class="rm" id="riskMatrix"></div></div>
         </article>
       </section>
 
-      <section class="card executive-actions"><div class="card-h"><div><div class="card-kicker">أولوية قيادية</div><div class="card-title">قرارات تحتاج متابعة</div><div class="card-sub">الحالات الأعلى أثراً التي تستدعي تدخلاً تنفيذياً</div></div></div><div class="card-b actions-list" id="executiveActions"></div></section>
+      <section class="card executive-actions"><div class="card-h"><div><div class="card-kicker">أولوية المتابعة</div><div class="card-title">مشاريع تحتاج متابعة</div><div class="card-sub">المشاريع التي تظهر مؤشرات مالية أو تشغيلية تستدعي الانتباه</div></div></div><div class="card-b actions-list" id="executiveActions"></div></section>
 
       <!-- Projects table preview -->
       <div class="tbl-card overview-table">
@@ -801,7 +803,7 @@ async function submitUpload(){
     const j=await r.json();
     if(r.ok){
       st.className='upl-status show ok';
-      st.textContent='✓ تم تحديث المحفظة — '+(j.message||'تم رفع الملف بنجاح');
+      st.textContent='✓ تم تحديث البيانات — '+(j.message||'تم رفع الملف بنجاح');
       await loadData();
       const now=new Date().toLocaleString('ar-SA');$('uploadLastSync').textContent=now;$('sideLastSync').textContent=now;
     }else{
@@ -834,22 +836,16 @@ function renderKPIs(){
   const backlogShare=k.tCV?k.tBL/k.tCV*100:0;
   const profitable=DATA.filter(p=>(p.net_profit||0)>0).length, losing=DATA.filter(p=>(p.net_profit||0)<0).length;
   const delayed=DATA.filter(p=>p._daysRem!==null&&p._daysRem<0&&!['Completed','Closed'].includes(p.status)).length;
-  const riskBearing=DATA.filter(p=>(p.risk||0)>0).length, total=DATA.length||1;
-  const healthScore=Math.round(clamp(100-(losing/total*38)-(delayed/total*28)-(riskBearing/total*20)+(profitable/total*14),0,100));
-  const health=healthScore>=75?{label:'صحي',color:ELM.healthy}:healthScore>=50?{label:'يحتاج متابعة',color:ELM.warning}:{label:'حرج',color:ELM.risk};
+  const watch=DATA.filter(p=>(p.net_profit||0)>=0&&((p.profit_pct||0)<10||(p._daysRem!==null&&p._daysRem<0)||(p.risk||0)>0)).length;
+  $('portfolioState').innerHTML=`<div class="state-item" style="color:${ELM.healthy}"><i></i><div><span>مشاريع رابحة</span><strong>${profitable}</strong></div></div><div class="state-item" style="color:${ELM.warning}"><i></i><div><span>مشاريع تحتاج متابعة</span><strong>${watch}</strong></div></div><div class="state-item" style="color:${ELM.risk}"><i></i><div><span>مشاريع خاسرة</span><strong>${losing}</strong></div></div>`;
   const svgs={folder:`<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,money:`<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>`,receipt:`<path d="M4 2v20l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V2l-2 2-2-2-2 2-2-2-2 2-2-2-2 2Z"/><path d="M9 9h6M9 13h6M9 17h3"/>`,bar:`<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,cost:`<path d="M21 10H3M21 6H3M21 14H3M21 18H3"/>`,coin:`<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`,pct:`<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>`,clock:`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,alert:`<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`,briefcase:`<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2"/>`};
   const kpis=[
-    {v:healthScore+' / 100',l:'صحة المحفظة',ic:svgs.briefcase,acc:health.color,sub:`<span class="health-label" style="color:${health.color}"><i class="health-dot"></i>${health.label}</span><strong>${profitable} رابح · ${losing} خاسر · ${delayed} متأخر</strong>`,filter:'all',page:'projects',cls:'executive-health'},
-    {v:fmtN(k.tCV)+' ريال',l:'إجمالي قيمة العقود',ic:svgs.money,acc:'#AE8FD5',sub:`يشمل تعديلات عقود بقيمة<strong>${Math.round(amendments/1e6).toLocaleString('ar-SA')} مليون ريال</strong>`,filter:'all',page:'financials'},
-    {v:fmtN(k.tRev)+' ريال',l:'إجمالي الإيرادات',ic:svgs.receipt,acc:ELM.revenue,sub:`منها<strong>${fmtN(currentRevenue)} ريال</strong>إيرادات الفترة الحالية`,filter:'all',page:'financials'},
-    {v:fmtN(k.tCost)+' ريال',l:'إجمالي التكاليف',ic:svgs.cost,acc:ELM.cost,sub:`منها<strong>${fmtN(currentCost)} ريال</strong>تكاليف الفترة الحالية`,filter:'all',page:'financials'},
-    {v:fmtN(k.tBL)+' ريال',l:'Backlog',ic:svgs.bar,acc:ELM.backlog,sub:`يمثل<strong>${backlogShare.toFixed(0)}%</strong>من إجمالي قيمة العقود`,filter:'all',page:'projects'},
-    {v:fmtN(k.tNet)+' ريال',l:'صافي الربح',ic:svgs.coin,acc:k.tNet>=0?ELM.profit:ELM.risk,sub:'الإيرادات مطروحًا منها<br>إجمالي التكاليف',filter:'all',page:'financials'},
-    {v:fmtPct(k.pMargin),l:'هامش الربح',ic:svgs.pct,acc:k.pMargin>=0?ELM.profit:ELM.risk,sub:'صافي الربح كنسبة من<br>إجمالي الإيرادات',filter:'all',page:'financials'},
     {v:k.tot,l:'إجمالي المشاريع',ic:svgs.folder,acc:ELM.planned,sub:'عدد المشاريع<br>في المحفظة',filter:'all',page:'projects'},
-    {v:k.act,l:'المشاريع النشطة',ic:svgs.briefcase,acc:ELM.revenue,sub:'المشاريع ذات الحالة<br>«جاري»',filter:'Ongoing',page:'projects'},
-    {v:k.losing,l:'المشاريع الخاسرة',ic:svgs.alert,acc:ELM.risk,sub:'مشاريع تجاوزت<br>تكلفتها إجمالي إيراداتها',filter:'neg',page:'projects'},
-    {v:k.exp30,l:'العقود المنتهية قريبًا',ic:svgs.clock,acc:ELM.cost,sub:'تنتهي خلال<strong>30 يومًا</strong>',filter:'all',page:'timeline'},
+    {v:k.act,l:'المشاريع الجارية',ic:svgs.briefcase,acc:ELM.revenue,sub:`تمثل<strong>${k.tot?Math.round(k.act/k.tot*100):0}%</strong>من المحفظة`,filter:'Ongoing',page:'projects'},
+    {v:fmtN(k.tRev)+' ريال',l:'إجمالي الإيرادات',ic:svgs.receipt,acc:ELM.revenue,sub:`منها<strong>${fmtN(currentRevenue)} ريال</strong>إيرادات الفترة الحالية`,filter:'all',page:'financials'},
+    {v:fmtN(k.tNet)+' ريال',l:'صافي الربح',ic:svgs.coin,acc:k.tNet>=0?ELM.profit:ELM.risk,sub:`<strong>${fmtPct(k.pMargin)} من الإيرادات</strong>`,filter:'all',page:'financials'},
+    {v:fmtN(k.tBL)+' ريال',l:'الأعمال المتبقية (Backlog)',ic:svgs.bar,acc:ELM.backlog,sub:`تمثل<strong>${backlogShare.toFixed(0)}%</strong>من قيمة العقود`,filter:'all',page:'projects'},
+    {v:fmtPct(k.pMargin),l:'هامش الربح',ic:svgs.pct,acc:k.pMargin>=0?ELM.profit:ELM.risk,sub:`<strong>${profitable} مشروعاً رابحاً</strong>`,filter:'all',page:'financials'},
   ];
   $('kpiGrid').innerHTML=kpis.map(k2=>`
     <button type="button" class="kpi ${k2.cls||''}" style="--kpi-accent:${k2.acc}" onclick="kpiClick('${k2.page}','${k2.filter}')" aria-label="${k2.l}: ${k2.v}">
@@ -919,15 +915,11 @@ function renderCharts(){
   const ec1=initEC('rcpWrap','250px');
   if(ec1)ec1.setOption({backgroundColor:'transparent',...chartMotion,
     tooltip:chartTip(ps=>{const project=t8[ps[0]?.dataIndex];return`<div style="min-width:190px"><b style="font-size:12px">${projectName(project)}</b><div style="color:${c.text};margin:3px 0 6px">${project?.project_code||''}</div><div>الإيرادات <b style="color:${ELM.revenue};float:left">${fmtN(project?.total_revenue)} ريال</b></div><div>التكاليف <b style="color:${ELM.cost};float:left">${fmtN(project?.total_cost)} ريال</b></div><div>صافي الربح <b style="color:${ELM.profit};float:left">${fmtN(project?.net_profit)} ريال</b></div><div>هامش الربح <b style="color:${ELM.profit};float:left">${fmtPct(project?.profit_pct||0)}</b></div></div>`}),
-    legend:chartLegend(),
+    legend:{show:false},
     grid:{top:36,bottom:52,left:8,right:12,containLabel:true},
     xAxis:{type:'category',data:t8.map(projectName),axisLabel:{color:c.text,fontSize:9,rotate:18,width:72,overflow:'truncate'},axisLine:{lineStyle:{color:c.grid}},axisTick:{show:false}},
     yAxis:{type:'value',axisLabel:{color:c.text,fontSize:9,formatter:v=>fmtN(v)},splitLine:{lineStyle:{color:c.grid}},axisLine:{show:false}},
-    series:[
-      {name:'الإيرادات',type:'bar',data:t8.map(x=>x.total_revenue||0),itemStyle:{color:ELM.revenue,borderRadius:[4,4,0,0]},barMaxWidth:14},
-      {name:'التكاليف',type:'bar',data:t8.map(x=>x.total_cost||0),itemStyle:{color:ELM.cost,borderRadius:[4,4,0,0]},barMaxWidth:14},
-      {name:'صافي الربح',type:'bar',data:t8.map(x=>x.net_profit||0),itemStyle:{color:ELM.profit,borderRadius:[4,4,0,0]},barMaxWidth:14}
-    ]
+    series:[{name:'صافي الربح',type:'bar',data:t8.map(x=>x.net_profit||0),itemStyle:{color:ELM.profit,borderRadius:[5,5,0,0]},barMaxWidth:32,label:{show:true,position:'top',formatter:p=>fmtN(p.value),color:c.text,fontSize:9}}]
   });
   bindChartDetails(ec1,t8);
 
@@ -990,6 +982,16 @@ function renderExpiryList(){
 
 /* ══ RISK MATRIX ══ */
 function renderRiskMatrix(){
+  const financialRisks=[...DATA].filter(p=>(Number(p.risk)||0)>0).sort((a,b)=>(Number(b.risk)||0)-(Number(a.risk)||0));
+  const maxFinancialRisk=Math.max(1,...financialRisks.map(p=>Number(p.risk)||0));
+  const financialLevel=value=>value>=maxFinancialRisk*.67?'high':value>=maxFinancialRisk*.34?'medium':'low';
+  const financialLevels={high:{label:'مرتفع',color:ELM.risk},medium:{label:'متوسط',color:ELM.cost},low:{label:'منخفض',color:ELM.healthy}};
+  $('riskSummary').innerHTML=Object.entries(financialLevels).map(([key,level])=>`<div class="risk-stat"><span>${level.label}</span><strong style="color:${level.color}">${financialRisks.filter(p=>financialLevel(Number(p.risk)||0)===key).length}</strong></div>`).join('');
+  const topRisks=financialRisks.slice(0,10).reverse(),colors=topRisks.map(p=>financialLevels[financialLevel(Number(p.risk)||0)].color),cRisk=gc();
+  const financialRiskChart=initEC('riskMatrix','285px');
+  if(financialRiskChart)financialRiskChart.setOption({backgroundColor:'transparent',...chartMotion,tooltip:chartTip(ps=>{const p=topRisks[ps[0]?.dataIndex];return`<b>${projectName(p)}</b><br>قيمة المخاطر المالية: <b>${fmtN(p?.risk)} ريال</b><br>التصنيف: <b>${financialLevels[financialLevel(Number(p?.risk)||0)].label}</b>`}),grid:{top:8,bottom:8,left:20,right:110,containLabel:true},xAxis:{type:'value',axisLabel:{color:cRisk.text,fontSize:9,formatter:fmtN},splitLine:{lineStyle:{color:cRisk.grid}},axisLine:{show:false}},yAxis:{type:'category',data:topRisks.map(projectName),axisLabel:{color:cRisk.text,fontSize:10,width:110,overflow:'truncate'},axisLine:{show:false},axisTick:{show:false}},series:[{type:'bar',data:topRisks.map((p,i)=>({value:Number(p.risk)||0,itemStyle:{color:colors[i],borderRadius:[0,5,5,0]}})),barMaxWidth:13,label:{show:true,position:'right',formatter:p=>fmtN(p.value),color:cRisk.text,fontSize:9}}]});
+  bindChartDetails(financialRiskChart,topRisks);
+  return;
   const p=DATA,c=gc();
   const maxRisk=Math.max(1,...p.map(x=>Math.abs(Number(x.risk)||0)));
   const maxContract=Math.max(1,...p.map(x=>Math.max(0,Number(x.total_contract_value)||0)));
@@ -1050,7 +1052,7 @@ function renderRiskMatrix(){
 
 function renderExecutiveActions(){
   const items=[...DATA].map(p=>({p,score:Math.abs(Math.min(0,p.net_profit||0))+(p.risk||0)+(p._daysRem!==null&&p._daysRem<0?Math.abs(p._daysRem)*100000:0)})).sort((a,b)=>b.score-a.score).slice(0,3);
-  $('executiveActions').innerHTML=items.map(({p})=>`<article class="action-item"><div class="action-title">⚠ ${projectName(p)}</div><div class="action-metrics"><span>المخاطر: <strong>${fmtN(p.risk||0)} ريال</strong></span><span>التأخير: <strong>${p._daysRem!==null&&p._daysRem<0?Math.abs(p._daysRem)+' يوم':'لا يوجد'}</strong></span><span>الحالة: <strong>يحتاج متابعة</strong></span></div><button class="action-btn" data-code="${escAttr(p.project_code)}">عرض المشروع</button></article>`).join('')||'<p style="color:var(--text3)">لا توجد حالات تتطلب متابعة حالياً</p>';
+  $('executiveActions').innerHTML=items.map(({p})=>{const reasons=[];if((p.risk||0)>0)reasons.push('مخاطر مالية مرتفعة');if((p.net_profit||0)<0)reasons.push('ربحية سالبة');if(p._daysRem!==null&&p._daysRem<0)reasons.push(`تأخير ${Math.abs(p._daysRem)} يوم`);if((p.progress_completed||0)<50)reasons.push('نسبة إنجاز منخفضة');return`<article class="action-item"><div class="action-title">⚠ ${projectName(p)}</div><div class="action-metrics"><span>سبب المتابعة</span>${reasons.slice(0,3).map(r=>`<strong>• ${r}</strong>`).join('')||'<strong>• متابعة المؤشرات التشغيلية</strong>'}</div><button class="action-btn" data-code="${escAttr(p.project_code)}">عرض التفاصيل</button></article>`;}).join('')||'<p style="color:var(--text3)">لا توجد مشاريع تتطلب متابعة حالياً</p>';
 }
 
 /* ══ TABLES ══ */
@@ -1145,7 +1147,7 @@ function openDetail(code){
     </div>
 
     <div class="det-tabs"><button class="det-tab on" onclick="showDetailTab(this,'overview')">نظرة عامة</button><button class="det-tab" onclick="showDetailTab(this,'finance')">الأداء المالي</button><button class="det-tab" onclick="showDetailTab(this,'risk')">المخاطر والتنفيذ</button><button class="det-tab" onclick="showDetailTab(this,'ai')">تحليل AI</button></div>
-    <div class="det-pane on" data-pane="overview"><div class="mini-kpis">${[['قيمة العقد',p.total_contract_value],['الإيرادات',p.total_revenue],['التكاليف',p.total_cost],['صافي الربح',p.net_profit],['هامش الربح',(p.profit_pct||0)+'%'],['Backlog',p.backlog],['المخاطر',p.risk]].map(([l,v])=>`<div class="mini-kpi"><span>${l}</span><strong>${typeof v==='number'?fmtN(v):v}</strong></div>`).join('')}</div><div class="det-sections">
+    <div class="det-pane on" data-pane="overview"><div class="mini-kpis">${[['قيمة العقد',p.total_contract_value],['الإيرادات',p.total_revenue],['التكاليف',p.total_cost],['صافي الربح',p.net_profit],['هامش الربح',(p.profit_pct||0)+'%'],['Backlog',p.backlog]].map(([l,v])=>`<div class="mini-kpi"><span>${l}</span><strong>${typeof v==='number'?fmtN(v):v}</strong></div>`).join('')}</div><div class="det-sections">
       ${sec('معلومات العقد',svgs.cal,[
         ['تاريخ البداية',p.start_date||'—'],
         ['تاريخ الانتهاء',p.end_date||'—'],
@@ -1317,7 +1319,7 @@ function toggleCop(){copOpen?closeCop():openCop();}
 function openCop(){copOpen=true;$('copPanel').classList.add('open');$('copOvl').classList.add('show');renderCopSuggestions();}
 function closeCop(){copOpen=false;$('copPanel').classList.remove('open');$('copOvl').classList.remove('show');}
 function sendS(btn){$('copIn').value=btn.textContent;$('copSugg').style.display='none';sendCop();}
-function renderCopSuggestions(){const p=window.currentExecutiveProject,box=$('copSugg');box.style.display='flex';if(p){$('copContext').textContent=`سياق المشروع: ${projectName(p)}`;box.innerHTML=`<div class="sugg-lbl">اقتراحات ذكية للمشروع المفتوح</div>${['لماذا المشروع متأخر؟','هل المشروع مربح؟','قارن مع مشروع مشابه','ما أهم المخاطر؟'].map(q=>`<button class="sugg" onclick="sendS(this)">${q} — ${projectName(p)}</button>`).join('')}`;}else{$('copContext').textContent='ذكاء المحفظة التنفيذي';}}
+function renderCopSuggestions(){const p=window.currentExecutiveProject,box=$('copSugg');box.style.display='flex';const questions=p?['ما سبب التأخير؟','هل المشروع مربح؟','قارن مع مشروع مشابه','ما أهم المخاطر؟']:['ما وضع المحفظة؟','ما أعلى المشاريع ربحية؟','ما المشاريع الأكثر خطورة؟'];$('copContext').textContent=p?`سياق المشروع: ${projectName(p)}`:'ذكاء المحفظة التنفيذي';box.innerHTML=`<div class="sugg-lbl">أسئلة مقترحة</div>${questions.map(q=>`<button class="sugg" onclick="sendS(this)">${q}${p?' — '+projectName(p):''}</button>`).join('')}`;}
 function openProjectAI(code){const p=DATA.find(x=>x.project_code===code);if(p)window.currentExecutiveProject=p;openCop();$('copIn').value=`قدم ملخصاً تنفيذياً وأبرز الملاحظات والتوصيات لمشروع ${projectName(p)}`;}
 
 async function sendCop(){
