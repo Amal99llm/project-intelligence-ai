@@ -284,12 +284,80 @@ def _list_ctx(src: dict | None) -> dict:
     ctx = (src or {}).get("result_context") or {}
     return {
         "last_result_scope": "list",
+        "last_scope": "portfolio",
         "last_result_type": "portfolio_filter",
         "last_list_project_codes": list(ctx.get("project_codes") or []),
         "last_project_list": list(ctx.get("project_codes") or []),
         "last_list_intent": ctx.get("intent"),
         "last_list_filters": list(ctx.get("filters") or []),
         "last_list_sort": ctx.get("sort"),
+    }
+
+
+def _has_contextual_project_reference(query: str) -> bool:
+    q = normalize_project_text(query)
+    markers = (
+        "هو", "هي", "هذا المشروع", "عنه", "تفاصيله",
+        "مديره", "ربحه", "ايراداته", "الباكلوج حقه", "بينه وبين",
+    )
+    tokens = set(q.split())
+    if any(marker in q if " " in marker else marker in tokens for marker in markers):
+        return True
+    return q in {"المشروع", "عن المشروع", "تفاصيل المشروع", "ملخص المشروع"}
+
+
+def _contextual_followup(query: str, today: date, ctx: dict) -> tuple | None:
+    """Resolve stored portfolio/project references before any LLM-dependent path."""
+    q = normalize_project_text(query)
+    scope = ctx.get("last_scope") or ctx.get("last_result_scope")
+
+    # "منهم" refers to the preceding portfolio/list result, never to a stale
+    # active project.  Expand only the ellipsis, then reuse the verified query
+    # pipeline and its existing calculations.
+    if "منهم" in q and scope in {"portfolio", "list"}:
+        if "كم" in q and any(word in q for word in ("جاري", "جاريه", "مستمر", "شغال")):
+            projects = fetch_enriched_projects(today=today)
+            text, src = _run_pipeline(PORTFOLIO_FILTER, "كم عدد المشاريع الجارية؟", today, projects)
+            return text, PORTFOLIO_FILTER, src, _list_ctx(src)
+
+    # A metric-only turn inherits portfolio scope until an explicit project or
+    # project pronoun switches the conversation back to project scope.
+    fields = detect_requested_fields(query)
+    if scope == "portfolio" and fields and not _has_contextual_project_reference(query):
+        projects = fetch_enriched_projects(today=today)
+        u = Understanding(intent=PORTFOLIO_KPI, scope="portfolio", confidence=1.0,
+                          method="context")
+        return _orchestrate(u, query, today, ctx, projects)
+
+    if not _has_contextual_project_reference(query):
+        return None
+    code = ctx.get("last_selected_project_id") or ctx.get("active_project_code")
+    if not code:
+        return (
+            "ما عندي مشروع محدد سابقًا أرجع له. اذكر اسم المشروع أولًا.",
+            "clarification", None, {},
+        )
+
+    projects = fetch_enriched_projects(today=today)
+    row, src = _lookup_verified(code, today, projects, query,
+                                fields[0].canonical if len(fields) == 1 else None)
+    if not row:
+        return verification.PROJECT_FALLBACK_MESSAGE, PROJECT_FOLLOWUP, None, {}
+    name = row.get("project_name_ar") or row.get("project_name_en") or code
+    metrics = [field.canonical for field in fields]
+    if len(metrics) > 1:
+        text = format_project_metrics(row, metrics)
+    else:
+        field = metrics[0] if metrics else None
+        text = _format_project(row, query, ctx, field,
+                               "field_lookup" if field else "general_followup")
+    return text, PROJECT_KPI if metrics else PROJECT_SUMMARY, src, {
+        "active_project_code": code,
+        "active_project_display_name": name,
+        "last_result_scope": "project",
+        "last_scope": "project",
+        "last_result_type": "project_kpi" if metrics else "project_summary",
+        "last_requested_metric": metrics[-1] if metrics else None,
     }
 
 
@@ -555,6 +623,22 @@ def _orchestrate(u: Understanding, query: str, today: date, ctx: dict, projects:
     if u.intent in {PORTFOLIO_FILTER, PORTFOLIO_RANKING}:
         text, src = _run_pipeline(u.intent, query, today, projects)
         upd.update(_list_ctx(src))
+        upd["last_result_type"] = (
+            "portfolio_ranking" if u.intent == PORTFOLIO_RANKING else "portfolio_filter"
+        )
+        if u.intent == PORTFOLIO_RANKING:
+            codes = upd.get("last_project_list") or []
+            if codes:
+                ranked_code = codes[0]
+                ranked = next((p for p in projects if p.get("project_code") == ranked_code), None)
+                upd.update({
+                    "last_ranked_project_id": ranked_code,
+                    "active_project_code": ranked_code,
+                    "active_project_display_name": (
+                        (ranked or {}).get("project_name_ar") or
+                        (ranked or {}).get("project_name_en") or ranked_code
+                    ),
+                })
         return text, u.intent, src, upd
 
     if u.intent == PORTFOLIO_KPI:
@@ -725,7 +809,13 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
 
     # Portfolio analysis is deliberately classified before planning, entity
     # resolution, and project follow-up handling.
-    executive_request = classify_executive_request(query)
+    from modules.comparison_engine import is_comparison_followup
+    has_comparison_context = bool(
+        ctx.get("last_compared_project_ids") or ctx.get("comparison_project_ids")
+    )
+    executive_request = None if (
+        has_comparison_context and is_comparison_followup(query)
+    ) else classify_executive_request(query)
     if executive_request:
         projects = fetch_enriched_projects(today=today)
         return execute_executive_request(executive_request, projects, today), "executive_analysis", None, {
@@ -807,10 +897,19 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     # An explicit comparison must retain comparison semantics even when only
     # one side resolves.  Let the comparison handler report the unresolved
     # side instead of allowing a partial plan to render one project silently.
-    from modules.comparison_engine import is_comparison_request
-    if is_comparison_request(query):
+    from modules.comparison_engine import is_comparison_request, is_comparison_followup
+    comparison_query = query
+    if "بينه وبين" in normalize_project_text(query):
+        selected_name = (ctx.get("last_selected_project_name") or
+                         ctx.get("active_project_display_name"))
+        if selected_name:
+            comparison_query = query.replace("بينه", selected_name)
+    if is_comparison_request(query) or (
+        is_comparison_followup(query) and
+        bool(ctx.get("last_compared_project_ids") or ctx.get("comparison_project_ids"))
+    ):
         projects = fetch_enriched_projects(today=today)
-        return _handle_comparison(query, today, ctx, projects, upd)
+        return _handle_comparison(comparison_query, today, ctx, projects, upd)
 
     # Explicit plural filtering owns portfolio scope.  It must run before an
     # active-project field follow-up can consume the metric phrase.
@@ -818,6 +917,10 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         projects = fetch_enriched_projects(today=today)
         text, src = _run_pipeline(PORTFOLIO_FILTER, query, today, projects)
         return text, PORTFOLIO_FILTER, src, _list_ctx(src)
+
+    contextual = _contextual_followup(query, today, ctx)
+    if contextual is not None:
+        return contextual
 
     # Build a complete plan before any active-project follow-up shortcut.  An
     # explicit current-turn entity therefore always outranks stale context.
@@ -956,9 +1059,25 @@ def answer(query: str, user_id: str = "anonymous",
     turn_updates = {
         "last_intent": query_type,
         "last_operation": query_type,
-        "last_scope": (ctx_updates or {}).get("last_result_scope"),
         "language_mode": "ar" if any("\u0600" <= char <= "\u06ff" for char in query) else "en",
     }
+    reported_scope = (ctx_updates or {}).get("last_scope")
+    if reported_scope is None:
+        legacy_scope = (ctx_updates or {}).get("last_result_scope")
+        if legacy_scope in {"portfolio", "list"}:
+            reported_scope = "portfolio"
+        elif legacy_scope in {"project", "comparison"}:
+            reported_scope = "project"
+        elif query_type in {PROJECT_SUMMARY, PROJECT_FOLLOWUP, PROJECT_KPI,
+                            PROJECT_COMPARISON, CONTRACT_DOC, CONTRACT_VALUE}:
+            reported_scope = "project"
+        elif query_type in {PORTFOLIO_KPI, PORTFOLIO_FILTER, PORTFOLIO_RANKING,
+                            PORTFOLIO_SUMMARY, EXEC_ATTENTION, LIST_FOLLOWUP}:
+            reported_scope = "portfolio"
+    # Small talk and failed turns preserve the last successful scope instead
+    # of erasing it with None.
+    if reported_scope is not None:
+        turn_updates["last_scope"] = reported_scope
     turn_updates.update(ctx_updates or {})
     session_context.update_context(session_id, **turn_updates)
     try:

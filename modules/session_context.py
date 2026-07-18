@@ -80,6 +80,14 @@ def _empty_context() -> dict[str, Any]:
         "last_operation": None,
         "last_metrics": [],
         "last_scope": None,
+        # Stable public conversation references.  These are the authoritative
+        # names used by deterministic context resolution; compatibility names
+        # above remain synchronized at this module boundary.
+        "last_selected_project_id": None,
+        "last_selected_project_name": None,
+        "last_ranked_project_id": None,
+        "last_compared_project_ids": [],
+        "last_successful_result_type": None,
         "conversation_topic": None,
         "language_mode": None,
         "_updated_at": time.time(),
@@ -152,6 +160,17 @@ def update_context(session_id: str, **fields: Any) -> None:
                 fields.setdefault(canonical, deepcopy(fields[legacy]))
             elif canonical in fields:
                 fields.setdefault(legacy, deepcopy(fields[canonical]))
+        stable_aliases = {
+            "active_project_code": "last_selected_project_id",
+            "active_project_display_name": "last_selected_project_name",
+            "comparison_project_ids": "last_compared_project_ids",
+            "last_result_type": "last_successful_result_type",
+        }
+        for compatibility, stable in stable_aliases.items():
+            if compatibility in fields:
+                fields.setdefault(stable, deepcopy(fields[compatibility]))
+            elif stable in fields:
+                fields.setdefault(compatibility, deepcopy(fields[stable]))
         if "pending_project_confirmation" in fields:
             pending_value = fields["pending_project_confirmation"]
             fields.setdefault("pending_original_request", pending_value.get("original_query") if pending_value else None)
@@ -218,6 +237,9 @@ def update_context(session_id: str, **fields: Any) -> None:
         for legacy, canonical in aliases.items():
             if legacy in fields:
                 fields[canonical] = deepcopy(fields[legacy])
+        for compatibility, stable in stable_aliases.items():
+            if compatibility in fields:
+                fields[stable] = deepcopy(fields[compatibility])
 
         _deep_merge(entry, fields)
         entry["_updated_at"] = time.time()
