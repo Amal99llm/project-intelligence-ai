@@ -515,8 +515,20 @@ def _llm_understand(query: str, ctx: dict, q_norm: str) -> Understanding:
         )
     except Exception as exc:
         logger.warning("LLM understanding failed: %s | query=%.60s", exc, query)
-        # Graceful fallback
-        has_ctx = bool(ctx.get("last_project_code"))
+        # Timeout/error fallback consumes the same structured state as the
+        # deterministic router.  Never downgrade a valid portfolio or
+        # comparison reference to a generic project lookup.
+        scope = ctx.get("last_scope") or ctx.get("last_result_scope")
+        compared = ctx.get("last_compared_project_ids") or ctx.get("comparison_project_ids") or []
+        q_fallback = normalize_text(query)
+        if compared and any(term in q_fallback for term in ("أيهم", "ايهم", "أيهما", "بينهم", "بينهما")):
+            return Understanding(intent=PROJECT_COMPARISON, scope=SCOPE_PROJECT,
+                                 is_followup=True, confidence=0.8, method="fallback_context")
+        if scope in {"portfolio", "list"} and "منهم" in q_fallback:
+            return Understanding(intent=PORTFOLIO_FILTER, scope=SCOPE_PORTFOLIO,
+                                 filter_intent="status_count", confidence=0.8,
+                                 method="fallback_context")
+        has_ctx = bool(ctx.get("last_selected_project_id") or ctx.get("last_project_code"))
         mentions = _extract_project_mentions(query)
         if has_ctx and not mentions:
             return Understanding(intent=PROJECT_FOLLOWUP, scope=SCOPE_PROJECT,
