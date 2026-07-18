@@ -10,9 +10,14 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Session
 from datetime import datetime
+from contextlib import contextmanager
+from pathlib import Path
+import os
+import threading
 import config
 
 engine = create_engine(config.DB_URL, echo=False)
+_SCHEMA_THREAD_LOCK = threading.Lock()
 
 
 class Base(DeclarativeBase):
@@ -109,8 +114,44 @@ class AuditLog(Base):
     ip_address    = Column(String(50))
 
 
+@contextmanager
+def _schema_initialization_lock():
+    """Serialize SQLite schema DDL without suppressing database failures."""
+    if engine.url.get_backend_name() != "sqlite" or not engine.url.database:
+        yield
+        return
+
+    database_path = Path(engine.url.database).resolve()
+    lock_path = database_path.with_name(f"{database_path.name}.schema.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with _SCHEMA_THREAD_LOCK, lock_path.open("a+b") as lock_file:
+        if os.name == "nt":
+            import msvcrt
+
+            lock_file.seek(0, os.SEEK_END)
+            if lock_file.tell() == 0:
+                lock_file.write(b"\0")
+                lock_file.flush()
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                yield
+            finally:
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
 def init_db():
-    Base.metadata.create_all(engine)
+    with _schema_initialization_lock():
+        Base.metadata.create_all(engine)
 
 
 def get_session() -> Session:
