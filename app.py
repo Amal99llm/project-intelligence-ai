@@ -39,7 +39,6 @@ from flask import Flask, render_template, request, jsonify, session as flask_ses
 from modules.time_utils import riyadh_today
 
 import config
-from modules.database    import init_db
 from modules.ingestion   import validate_upload, save_upload, read_excel, read_pdf
 from modules.processor   import process_excel_file, process_pdf_contract
 from modules.ai_engine   import answer
@@ -63,8 +62,6 @@ GENERIC_ERROR_MESSAGE = "حدث خطأ أثناء معالجة الطلب. حا�
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_UPLOAD_BYTES
-
-init_db()
 
 for warning in config.validate_config():
     logger.warning("CONFIG WARNING: %s", warning)

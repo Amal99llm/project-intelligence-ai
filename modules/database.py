@@ -109,10 +109,6 @@ class AuditLog(Base):
     ip_address    = Column(String(50))
 
 
-def init_db():
-    Base.metadata.create_all(engine)
-
-
 def get_session() -> Session:
     return Session(engine)
 
