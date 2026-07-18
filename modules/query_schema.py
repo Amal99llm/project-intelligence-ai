@@ -12,7 +12,6 @@ what is *allowed*, never what the data actually is.
 from __future__ import annotations
 
 from typing import Any
-from modules.intent_schema import INTENTS as CONVERSATION_INTENTS
 
 # ── Intent categories (semantic, not keyword-based) ────────────────────────
 

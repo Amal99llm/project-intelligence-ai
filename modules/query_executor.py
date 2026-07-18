@@ -170,7 +170,3 @@ def execute(spec: dict[str, Any], today: date | None = None,
             ),
         },
     }
-    if f["op"] == "is_null":
-        return value is None
-    if f["op"] == "not_null":
-        return value is not None

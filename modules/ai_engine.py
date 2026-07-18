@@ -14,7 +14,7 @@ Entry pipeline per turn:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 
 from modules.database import log_query
 from modules import session_context
@@ -26,7 +26,7 @@ from modules.intent_schema import (
     CONTRACT_DOC, CONTRACT_VALUE,
     GROUPED_ANALYTICS, SMALL_TALK, OUT_OF_SCOPE,
 )
-from modules.understanding import understand, Understanding, SCOPE_PROJECT, SCOPE_PORTFOLIO
+from modules.understanding import understand, Understanding
 from modules.followup_gate import check as followup_gate_check
 from modules.response_composer import compose_project_response, compose_assessment_response
 from modules.kpi_calculator import calculate_executive_kpis, summarize_by_bu
@@ -417,30 +417,32 @@ def _handle_list_followup(query: str, u: Understanding, ctx: dict, projects: lis
                 "اكبر خساره","اكبر خسارة","اسوا","الاسوا","اقل ربح","الاقل",
                 "worst","lowest","biggest loss","most loss",
             ))
-            _BEST_MARKERS = tuple(_nt(v) for v in (
-                "اعلى","الاعلى","اكثر","الاكثر","اكبر ربح","افضل",
-                "highest","best","most profit",
-            ))
             want_worst = any(m in q_norm for m in _WORST_MARKERS)
             sortable = [(r.get(field.canonical), r) for r in rows if r.get(field.canonical) is not None]
             if sortable:
                 if want_worst:
                     # ascending → most negative first
                     sortable.sort(key=lambda x: (x[0] if isinstance(x[0], (int, float)) else 0))
-                    top = sortable[0]
-                    top_name = top[1].get("project_name_ar") or top[1].get("project_code")
-                    val = top[0]
+                    val = sortable[0][0]
+                    top_names = [
+                        row.get("project_name_ar") or row.get("project_code")
+                        for value, row in sortable if value == val
+                    ]
                     from modules.response_formatter import _money
                     val_str = _money(val) if isinstance(val, (int, float)) else str(val)
-                    return f"الأكبر خسارة من القائمة السابقة هو «{top_name}» بخسارة {val_str}."
+                    names_text = "، ".join(f"«{name}»" for name in top_names)
+                    return f"الأكبر خسارة من القائمة السابقة: {names_text}، بخسارة {val_str}."
                 else:
                     sortable.sort(key=lambda x: -(x[0] if isinstance(x[0], (int, float)) else 0))
-                    top = sortable[0]
-                    top_name = top[1].get("project_name_ar") or top[1].get("project_code")
-                    val = top[0]
+                    val = sortable[0][0]
+                    top_names = [
+                        row.get("project_name_ar") or row.get("project_code")
+                        for value, row in sortable if value == val
+                    ]
                     from modules.response_formatter import _money
                     val_str = _money(val) if isinstance(val, (int, float)) else str(val)
-                    return f"الأعلى في {field.label_ar} من القائمة السابقة هو «{top_name}» بقيمة {val_str}."
+                    names_text = "، ".join(f"«{name}»" for name in top_names)
+                    return f"الأعلى في {field.label_ar} من القائمة السابقة: {names_text}، بقيمة {val_str}."
     exp = _explanations.get(intent, "هذه المشاريع طابقت شروط طلبك السابق.")
     listed = "، ".join(f"«{n}»" for n in names[:10])
     if lf_type == "explain":
@@ -453,8 +455,8 @@ def _handle_list_followup(query: str, u: Understanding, ctx: dict, projects: lis
                 f"الأكبر خسارة هو «{names[0]}»."
                 if names else "هذه المشاريع تسجل صافي ربح سالب وفق البيانات الحالية."
             ),
-            "expiring": f"هذه المشاريع لديها تواريخ انتهاء عقود خلال 30 يوماً القادمة.",
-            "overdue": f"هذه المشاريع تجاوزت تاريخ انتهائها المحدد وما زالت قيد التنفيذ.",
+            "expiring": "هذه المشاريع لديها تواريخ انتهاء عقود خلال 30 يوماً القادمة.",
+            "overdue": "هذه المشاريع تجاوزت تاريخ انتهائها المحدد وما زالت قيد التنفيذ.",
         }
         why_text = _why_explanations.get(intent, exp)
         return why_text
@@ -897,16 +899,16 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     # ── Step 1: Follow-up First Gate ─────────────────────────────────────────
     gate = followup_gate_check(query, ctx)
     if gate.fires:
-        logger.info("FollowupGate fired: field=%s intent=%s confidence=%.2f reason=%s",
-                    gate.field, gate.intent, gate.confidence, gate.reason)
+        logger.debug("FollowupGate fired: field=%s intent=%s confidence=%.2f reason=%s",
+                     gate.field, gate.intent, gate.confidence, gate.reason)
         projects = fetch_enriched_projects(today=today)
         return _handle_followup_gate(gate, query, today, ctx, projects)
 
     # ── Step 2: Understand ────────────────────────────────────────────────────
     projects = fetch_enriched_projects(today=today)
     u = understand(query, ctx)
-    logger.info("Understanding: intent=%s scope=%s method=%s conf=%.2f",
-                u.intent, u.scope, u.method, u.confidence)
+    logger.debug("Understanding: intent=%s scope=%s method=%s conf=%.2f",
+                 u.intent, u.scope, u.method, u.confidence)
 
     # ── Step 2b: Methodology ──────────────────────────────────────────────────
     if is_methodology_question(query) and ctx.get("last_requested_field") in FIELDS:

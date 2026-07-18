@@ -6,7 +6,6 @@ Reads Excel and PDF files, validates them, returns clean raw data.
 To add a new source (CSV, API, SAP) — add a new function here only.
 """
 
-import os
 import hashlib
 import logging
 from pathlib import Path

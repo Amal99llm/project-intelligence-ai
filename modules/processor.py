@@ -5,7 +5,6 @@ Other sheets: preserved in code, skipped in current phase.
 """
 
 import logging
-import json
 from pathlib import Path
 from datetime import date, datetime
 
@@ -314,7 +313,6 @@ def _embed(texts: list[str]) -> list[list[float]]:
 
 def process_pdf_contract(text: str, file_path: Path,
                           project_code: str, contract_ref: str) -> int:
-    from modules.database import get_session
     chunks     = _chunk_text(text)
     collection = _get_chroma()
     embeddings = _embed(chunks)

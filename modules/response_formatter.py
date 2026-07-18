@@ -13,7 +13,6 @@ so the model has no way to produce a number that wasn't already verified.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date, datetime
 

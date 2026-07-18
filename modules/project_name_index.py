@@ -6,14 +6,13 @@ richer alias expansion (nicknames, years, tokens) without changing callers.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Iterable
 
 from modules.project_entity_resolver import (
     _resolve_project_legacy as _legacy,
     ProjectResolution,
     ProjectCandidate,
-    normalize_project_text,
 )
 
 

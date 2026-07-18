@@ -30,14 +30,11 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any
 
 
 import config
 from modules.contract_semantics import parse_future_period_days
-from modules.project_entity_resolver import normalize_project_text
 from modules.semantic_dictionary import (
-    FIELDS,
     detect_requested_field,
     detect_semantic_intent,
     detect_small_talk,

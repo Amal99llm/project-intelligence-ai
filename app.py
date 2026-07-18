@@ -36,7 +36,6 @@ if sys.platform == "win32":
 
 import bleach
 from flask import Flask, render_template, request, jsonify, session as flask_session, Response
-from datetime import date
 from modules.time_utils import riyadh_today
 
 import config

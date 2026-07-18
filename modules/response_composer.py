@@ -15,7 +15,6 @@ Changes from v1:
 from __future__ import annotations
 
 import logging
-import random
 from typing import Any
 
 import config

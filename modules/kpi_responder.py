@@ -37,7 +37,6 @@ from modules.project_repository import fetch_enriched_projects
 from modules.semantic_dictionary import KPI_ALIASES, METHODOLOGY_MARKERS
 
 
-_ALIASES = {name: set(aliases) for name, aliases in KPI_ALIASES.items()}
 def _definite_article_variants(alias: str) -> set[str]:
     """An Arabic alias stored with the definite article ('الإيرادات') must
     also match the same question phrased without it ('إيرادات مشروع...').
@@ -53,7 +52,7 @@ def _definite_article_variants(alias: str) -> set[str]:
 
 _ALIASES = {
     name: set().union(*(_definite_article_variants(normalize_project_text(alias)) for alias in aliases))
-    for name, aliases in _ALIASES.items()
+    for name, aliases in KPI_ALIASES.items()
 }
 
 _EXPLANATION_MARKERS = METHODOLOGY_MARKERS
