@@ -47,6 +47,7 @@ from modules.knowledge_boundary import classify_boundary, boundary_answer
 from modules.executive_analysis import format_attention_summary, project_attention
 from modules import query_builder, query_executor, query_schema, response_formatter, verification
 from modules.query_planner import build_plan
+from modules.executive_intelligence import classify_executive_request, execute_executive_request
 
 logger = logging.getLogger(__name__)
 
@@ -621,10 +622,16 @@ def _orchestrate(u: Understanding, query: str, today: date, ctx: dict, projects:
                 PROJECT_SUMMARY, None, upd,
             )
 
-    # Default: project summary
-    text, src, lu = _resolve_and_respond(query, today, projects, ctx)
-    upd.update(lu)
-    return text, PROJECT_SUMMARY, src, upd
+    # Unknown language is not evidence of a project entity. Lookup remains
+    # available for explicit project-shaped requests, never as the generic
+    # analytical fallback.
+    phrase = extract_project_phrase(query)
+    if len(phrase) >= 3:
+        text, src, lu = _resolve_and_respond(query, today, projects, ctx)
+        upd.update(lu)
+        return text, PROJECT_SUMMARY, src, upd
+    return ("فهمت أنك تطلب تحليلًا، لكن هذا النوع من التحليل غير مدعوم حاليًا.",
+            "controlled_fallback", None, upd)
 
 
 # ── Main entry ────────────────────────────────────────────────────────────────
@@ -636,6 +643,17 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     if detect_small_talk(query):
         u = Understanding(intent=SMALL_TALK, scope="unknown", confidence=1.0, method="fast_path")
         return _orchestrate(u, query, today, ctx, [])
+
+    # Portfolio analysis is deliberately classified before planning, entity
+    # resolution, and project follow-up handling.
+    executive_request = classify_executive_request(query)
+    if executive_request:
+        projects = fetch_enriched_projects(today=today)
+        return execute_executive_request(executive_request, projects, today), "executive_analysis", None, {
+            "last_result_type": "executive_analysis",
+            "last_result_scope": "portfolio",
+            "last_executive_result": {"analyses": [item.value for item in executive_request.analyses]},
+        }
 
     q_normalized = normalize_project_text(query)
     pending_options = (ctx.get("pending_project_confirmation") or {}).get("candidates") or []
