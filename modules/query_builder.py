@@ -176,6 +176,22 @@ def _deterministic_conversational_spec(query: str, today_str: str) -> dict | Non
     filters = []
     if any(term in q for term in ("المشاريع الجاريه", "المشاريع الجارية", "مشروع جاري", "مشروع شغال", "المشاريع المستمره", "ongoing projects")):
         filters.append({"column": "status", "op": "==", "value": "Ongoing"})
+    if any(term in q for term in ("خسائر", "خاسره", "خاسرة", "loss making", "loss-making")):
+        filters.append({"column": "net_profit", "op": "<", "value": 0})
+    if any(term in q for term in ("قرب انتهاء", "قريبه من expiry", "قريبة من expiry", "close to contract expiry", "close to expiry")):
+        filters.append({"column": "days_remaining", "op": "between", "value": 0, "value2": 90})
+    if any(term in q for term in ("المتاخره", "المتأخرة", "overdue")):
+        filters.append({"column": "days_remaining", "op": "<", "value": 0})
+    if any(term in q for term in ("عندها مخاطر", "فيها مخاطر", "recorded risk", "have risk")):
+        filters.append({"column": "risk", "op": ">", "value": 0})
+    if any(term in q for term in ("المكتمله", "المكتملة", "completed projects")):
+        filters.append({"column": "status", "op": "in", "value": ["Completed", "Closed"]})
+    contract_threshold = re.search(r"(?:قيمت\w*|worth|contract value)\s*(?:فوق|اكثر من|أكثر من|more than|over|above)\s*(?:sar\s*)?(\d+(?:\.\d+)?)\s*(مليون|million)?", q)
+    if contract_threshold:
+        multiplier = 1_000_000 if contract_threshold.group(2) else 1
+        filters.append({"column": "total_contract_value", "op": ">", "value": float(contract_threshold.group(1)) * multiplier})
+    if any(term in q for term in ("منخفضه مقارنه بالمده", "منخفضة مقارنة بالمدة", "behind schedule based on elapsed time", "behind plan")):
+        filters.append({"column": "progress_gap", "op": ">=", "value": 20})
     margin_match = re.search(r"(?:هامش\w*|margin)\s*(?:اقل من|دون|تحت|below|less than)\s*(\d+(?:\.\d+)?)", q)
     if margin_match:
         filters.append({"column": "profit_pct", "op": "<", "value": float(margin_match.group(1))})

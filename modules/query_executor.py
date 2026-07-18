@@ -134,15 +134,25 @@ def execute(spec: dict[str, Any], today: date | None = None,
     # aggregation, never before it.
     aggregate_over_limited_rows = spec.get("aggregate_over_limited_rows", False)
 
+    def limited_with_ties(source):
+        limit = spec.get("limit")
+        if not limit or len(source) <= limit or not spec.get("sort"):
+            return source[:limit] if limit else source
+        boundary = source[limit - 1].get(spec["sort"]["column"])
+        end = limit
+        while end < len(source) and source[end].get(spec["sort"]["column"]) == boundary:
+            end += 1
+        return source[:end]
+
     if spec["aggregation"] and spec["limit"] and aggregate_over_limited_rows:
-        aggregated_rows = rows[: spec["limit"]]
+        aggregated_rows = limited_with_ties(rows)
         display_rows = aggregated_rows
     elif spec["aggregation"]:
         aggregated_rows = rows
-        display_rows = rows[: spec["limit"]] if spec["limit"] else rows
+        display_rows = limited_with_ties(rows)
     else:
         aggregated_rows = rows
-        display_rows = rows[: spec["limit"]] if spec["limit"] else rows
+        display_rows = limited_with_ties(rows)
 
     aggregation_result = _aggregate(aggregated_rows, spec["aggregation"]) if spec["aggregation"] else None
 
@@ -155,3 +165,7 @@ def execute(spec: dict[str, Any], today: date | None = None,
         "aggregation_result": aggregation_result,
         "aggregated_row_count": len(aggregated_rows) if spec["aggregation"] else None,
     }
+    if f["op"] == "is_null":
+        return value is None
+    if f["op"] == "not_null":
+        return value is not None

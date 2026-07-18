@@ -134,6 +134,13 @@ def fetch_enriched_projects(today: date | None = None) -> list[dict[str, Any]]:
             profit, margin = project_financials(project)
             project["net_profit"] = profit
             project["profit_pct"] = margin
+            project["expected_progress_pct"] = None
+            project["progress_gap"] = None
+            start = _to_date(r.start_date)
+            if start and end and end > start and project["progress_completed"] is not None:
+                elapsed = max(0.0, min(1.0, (today - start).days / (end - start).days))
+                project["expected_progress_pct"] = elapsed * 100
+                project["progress_gap"] = project["expected_progress_pct"] - project["progress_completed"]
             projects.append(project)
     return projects
 

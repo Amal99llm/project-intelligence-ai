@@ -59,6 +59,8 @@ RAW_NUMERIC_COLUMNS = {
     "progress_completed", "acc_rev", "pb", "adv", "ar", "contract_assets", "ap",
     "acc_exp", "contract_liabilities", "deferred_cost", "open_po", "ecl_ar",
     "ecl_acc_rev", "etc_cost", "etc_revenue",
+    "risk", "contingency", "total_planned_cost", "planned_profit",
+    "planned_pm_pct", "variance", "net_etc", "etc_pct",
 }
 
 RAW_STRING_COLUMNS = {
@@ -75,6 +77,8 @@ COMPUTED_COLUMNS = {
     "profit_pct": "(total_revenue - total_cost) / total_revenue * 100",
     "effective_end_date": "amended_end_date if set else end_date",
     "days_remaining": "effective_end_date - today",
+    "expected_progress_pct": "elapsed project duration / total project duration * 100",
+    "progress_gap": "expected progress percentage - recorded progress percentage",
 }
 
 FILTERABLE_COLUMNS = RAW_NUMERIC_COLUMNS | RAW_STRING_COLUMNS | RAW_DATE_COLUMNS | set(COMPUTED_COLUMNS)
@@ -83,7 +87,7 @@ AGGREGATABLE_COLUMNS = RAW_NUMERIC_COLUMNS | {"net_profit", "profit_pct", "proje
 
 # ── Operators / aggregations ────────────────────────────────────────────
 
-OPERATORS = {"<", "<=", ">", ">=", "==", "!=", "between", "contains", "in"}
+OPERATORS = {"<", "<=", ">", ">=", "==", "!=", "between", "contains", "in", "is_null", "not_null"}
 MAX_IN_VALUES = 20
 AGGREGATIONS = {"SUM", "COUNT", "AVG", "MAX", "MIN"}
 SORT_DIRECTIONS = {"ASC", "DESC"}
@@ -108,6 +112,8 @@ def _validate_filter(f: dict, errors: list[str]) -> dict | None:
     if op not in OPERATORS:
         errors.append(f"Operator not allowed: {op!r}")
         return None
+    if op in {"is_null", "not_null"}:
+        return {"column": column, "op": op}
     if op == "contains" and column not in RAW_STRING_COLUMNS:
         errors.append(f"'contains' only allowed on text columns, not {column!r}")
         return None
