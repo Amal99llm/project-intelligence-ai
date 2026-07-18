@@ -123,6 +123,19 @@ def _turn(session_id, query, today):
     return text, kind, get_context(session_id)
 
 
+def test_pending_confirmation_accepts_mixed_reply_and_rejection_clears_state():
+    candidates = [{"project_code": "PRJ-001", "display_name": "Researcher"}]
+    confirmed = _try_resolve_pending("ايوه yes", {
+        "pending_project_confirmation": {"candidates": candidates, "kind": "lookup"}
+    })
+    assert confirmed and confirmed[0] == "PRJ-001"
+    ctx = {"pending_project_confirmation": {"candidates": candidates, "kind": "lookup"}}
+    text, kind, _, updates = _answer_inner("لا مو هذا", date(2026, 7, 15), ctx)
+    assert kind == "clarification_rejected"
+    assert updates["pending_project_confirmation"] is None
+    assert "اذكر" in text
+
+
 @pytest.fixture()
 def no_ai(monkeypatch):
     def unavailable():

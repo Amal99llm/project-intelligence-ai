@@ -79,7 +79,9 @@ def _empty_context() -> dict[str, Any]:
         "last_intent": None,
         "last_operation": None,
         "last_metrics": [],
+        "last_scope": None,
         "conversation_topic": None,
+        "language_mode": None,
         "_updated_at": time.time(),
     }
 

@@ -62,7 +62,11 @@ _ORDINAL_NORM = {normalize_project_text(k): v for k, v in {
     "1":0,"2":1,"3":2,"4":3,"5":4,
 }.items()}
 _YES_NORM = {normalize_project_text(w) for w in (
-    "نعم","ايوه","أيوه","إيه","ايه","يب","اه","آه","صح","صحيح","أكيد","اكيد","هو","هذا","yes","y"
+    "نعم","ايوه","أيوه","إيه","ايه","يب","اه","آه","صح","صحيح","أكيد","اكيد","تمام","هو","هذا","بالضبط",
+    "yes","yeah","yep","correct","exactly","right","that's it","this one","y"
+)}
+_NO_NORM = {normalize_project_text(w) for w in (
+    "لا", "مو هو", "لا مو هذا", "غلط", "غيره", "no", "not this one", "wrong project", "another one",
 )}
 _LAST_NORM = {normalize_project_text(w) for w in ("الأخير", "الاخير", "آخر واحد", "last")}
 _NEXT_NORM = {normalize_project_text(w) for w in ("اللي بعده", "التالي", "next")}
@@ -101,7 +105,7 @@ def _try_resolve_pending(query: str, ctx: dict):
             chosen = dict(pending)
             chosen["selected_index"] = idx
             return candidates[idx]["project_code"], candidates[idx]["display_name"], chosen
-    if len(candidates) == 1 and tokens & _YES_NORM:
+    if len(candidates) == 1 and (tokens & _YES_NORM or any(value in normalized for value in _YES_NORM if len(value) > 1)):
         return candidates[0]["project_code"], candidates[0]["display_name"], pending
     named = [c for c in candidates if normalized in {
         normalize_project_text(c["display_name"]),
@@ -644,6 +648,16 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         u = Understanding(intent=SMALL_TALK, scope="unknown", confidence=1.0, method="fast_path")
         return _orchestrate(u, query, today, ctx, [])
 
+    normalized_reply = normalize_project_text(query)
+    if ctx.get("pending_project_confirmation") and (
+        normalized_reply in _NO_NORM or any(value in normalized_reply for value in _NO_NORM if len(value) > 2)
+    ):
+        return "تمام، اذكر اسمًا أو جزءًا أوضح من اسم المشروع.", "clarification_rejected", None, {
+            "pending_project_confirmation": None,
+            "pending_original_request": None,
+            "pending_disambiguation_options": [],
+        }
+
     # Portfolio analysis is deliberately classified before planning, entity
     # resolution, and project follow-up handling.
     executive_request = classify_executive_request(query)
@@ -846,6 +860,8 @@ def answer(query: str, user_id: str = "anonymous",
     turn_updates = {
         "last_intent": query_type,
         "last_operation": query_type,
+        "last_scope": (ctx_updates or {}).get("last_result_scope"),
+        "language_mode": "ar" if any("\u0600" <= char <= "\u06ff" for char in query) else "en",
     }
     turn_updates.update(ctx_updates or {})
     session_context.update_context(session_id, **turn_updates)
