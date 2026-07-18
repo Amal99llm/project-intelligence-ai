@@ -83,3 +83,25 @@ def test_margin_between_filter_is_portfolio_scope(seeded_db, today, no_ai):
     )
     assert kind == "portfolio_filter"
     assert "45.44" not in response
+
+
+def test_numeric_disambiguation_selects_saved_option_without_llm(seeded_db, today, no_ai):
+    _name_researcher(seeded_db)
+    with get_session() as db:
+        first = db.query(BacklogProject).filter_by(project_code="PRJ-002").one()
+        second = db.query(BacklogProject).filter_by(project_code="PRJ-003").one()
+        first.project_name_ar = "مشروع العقار الأول"
+        second.project_name_ar = "مشروع العقار الثاني"
+        db.commit()
+
+    _send("numeric-choice", "اعطني ملخص مشروع الباحث", today)
+    prompt, _ = _send("numeric-choice", "اعطني ملخص مشروع العقار", today)
+    options = get_context("numeric-choice")["pending_project_confirmation"]["candidates"]
+    assert len(options) >= 2 and "1." in prompt
+
+    response, kind = _send("numeric-choice", "1", today)
+    context = get_context("numeric-choice")
+    assert kind == "project_summary"
+    assert context["active_project_code"] == options[0]["project_code"]
+    assert options[0]["display_name"] in response
+    assert "الباحث الاجتماعي الثاني" not in response
