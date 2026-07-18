@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import hashlib
+import re
 from datetime import date
 
 from modules.database import log_query
@@ -411,6 +412,67 @@ def _comparison_side_followup(query: str, today: date, ctx: dict) -> tuple | Non
             "last_result_scope": "project", "last_result_type": "project_kpi" if metric else "project_summary",
             "last_requested_metric": metric, "last_lookup_succeeded": True,
         }
+
+
+_CONTEXT_COMPARISON = re.compile(
+    r"(?:بينه\s+وبين|قارنه\s+مع|قارنه\s+بين|مقارن[هة]\s+معه|معه)\s+(.+)$",
+    re.IGNORECASE,
+)
+
+
+def _contextual_comparison(query: str, today: date, ctx: dict) -> tuple | None:
+    """Resolve the contextual side as an ID; match only the explicitly named side.
+
+    Never synthesize a comparison sentence containing the active project's
+    display name: Arabic project names commonly contain ``و``, which is also
+    the comparison separator and can split a valid name in the wrong place.
+    """
+    match = _CONTEXT_COMPARISON.search(normalize_project_text(query))
+    if not match:
+        return None
+    active_id = ctx.get("last_selected_project_id") or ctx.get("last_ranked_project_id")
+    if not active_id:
+        return "اذكر اسم المشروع الأول للمقارنة.", PROJECT_COMPARISON, None, {}
+    explicit_phrase = match.group(1).strip()
+    projects = fetch_enriched_projects(today=today)
+    by_code = {project.get("project_code"): project for project in projects}
+    active = by_code.get(active_id)
+    if not active:
+        return "تعذر العثور على المشروع السابق في البيانات الحالية.", PROJECT_COMPARISON, None, {}
+    resolution = resolve_project(explicit_phrase, projects)
+    if resolution.status in {"ambiguous", "confirmation"}:
+        pending = _pending_state(resolution, "comparison", original_query=query)
+        pending["resolved_codes"] = [active_id]
+        pending["comparison_side"] = 1
+        return format_resolution_prompt(resolution), PROJECT_COMPARISON, None, {
+            "pending_project_confirmation": pending,
+            "comparison_project_ids": [active_id],
+            "last_result_type": "comparison_pending",
+        }
+    if resolution.status != "matched":
+        return "لم أتمكن من تحديد المشروع الثاني للمقارنة. اذكر اسمه بشكل أوضح.", PROJECT_COMPARISON, None, {}
+    second_id = resolution.canonical_project_code
+    second = by_code.get(second_id)
+    if not second or second_id == active_id:
+        return "اختر مشروعًا آخر للمقارنة مع المشروع السابق.", PROJECT_COMPARISON, None, {}
+    from modules.comparison_engine import format_comparison, comparison_field
+    ids = [active_id, second_id]
+    names = [
+        project.get("project_name_ar") or project.get("project_name_en") or project.get("project_code")
+        for project in (active, second)
+    ]
+    metric = comparison_field(query)
+    return format_comparison([active, second], query), PROJECT_COMPARISON, None, {
+        "comparison_project_ids": ids,
+        "last_compared_project_ids": ids,
+        "last_compared_project_names": names,
+        "last_comparison": {"codes": ids, "field": metric},
+        "last_result_scope": "comparison",
+        "last_scope": "comparison",
+        "last_result_type": "comparison",
+        "last_requested_metric": metric,
+        "pending_project_confirmation": None,
+    }
 
 
 def _execute_compound_plan(plan, query: str, today: date, projects: list, ctx: dict):
@@ -871,6 +933,9 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     side_followup = _comparison_side_followup(query, today, ctx)
     if side_followup is not None:
         return side_followup
+    contextual_comparison = _contextual_comparison(query, today, ctx)
+    if contextual_comparison is not None:
+        return contextual_comparison
 
     # Portfolio analysis is deliberately classified before planning, entity
     # resolution, and project follow-up handling.
