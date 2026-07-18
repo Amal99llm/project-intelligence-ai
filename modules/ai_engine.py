@@ -804,6 +804,14 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
         upd["last_result_type"] = "project_kpi" if orig_field else "project_summary"
         return text, PROJECT_KPI if orig_field else PROJECT_SUMMARY, src, upd
 
+    # An explicit comparison must retain comparison semantics even when only
+    # one side resolves.  Let the comparison handler report the unresolved
+    # side instead of allowing a partial plan to render one project silently.
+    from modules.comparison_engine import is_comparison_request
+    if is_comparison_request(query):
+        projects = fetch_enriched_projects(today=today)
+        return _handle_comparison(query, today, ctx, projects, upd)
+
     # Build a complete plan before any active-project follow-up shortcut.  An
     # explicit current-turn entity therefore always outranks stale context.
     planning_projects = fetch_enriched_projects(today=today)
