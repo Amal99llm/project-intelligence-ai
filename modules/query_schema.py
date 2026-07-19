@@ -69,6 +69,13 @@ RAW_STRING_COLUMNS = {
 
 RAW_DATE_COLUMNS = {"start_date", "end_date", "amended_end_date"}
 
+# `status` is a small, fixed enum. Rejecting anything else here is a safety
+# net for the LLM-generated path: without it, a literal, non-canonical value
+# (e.g. the model inventing "نشط" instead of resolving it to "Ongoing")
+# would silently execute as a filter that matches zero rows instead of
+# failing loudly enough to fall back to a deterministic resolver upstream.
+STATUS_ENUM = {"Ongoing", "Completed", "Closed", "On-hold", "Pipeline"}
+
 # name -> human-readable formula, purely documentary; the actual computation
 # always lives in modules.kpi_calculator.
 COMPUTED_COLUMNS = {
@@ -129,9 +136,15 @@ def _validate_filter(f: dict, errors: list[str]) -> dict | None:
         if len(values) > MAX_IN_VALUES:
             errors.append(f"'in' list too long on column {column!r} (max {MAX_IN_VALUES})")
             return None
+        if column == "status" and not set(values) <= STATUS_ENUM:
+            errors.append(f"Unrecognized status value(s) in {values!r}, expected one of {sorted(STATUS_ENUM)}")
+            return None
         return {"column": column, "op": op, "value": values}
     if "value" not in f:
         errors.append(f"Filter on {column!r} is missing 'value'")
+        return None
+    if column == "status" and op in {"==", "!="} and f["value"] not in STATUS_ENUM:
+        errors.append(f"Unrecognized status value {f['value']!r}, expected one of {sorted(STATUS_ENUM)}")
         return None
     return {"column": column, "op": op, "value": f["value"]}
 

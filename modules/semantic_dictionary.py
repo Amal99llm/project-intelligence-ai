@@ -102,7 +102,7 @@ FIELD_DEFINITIONS = (
     _f("amended_end_date", "Amended End Date CR", "تاريخ الانتهاء المعدل", "Amended end date", ("التاريخ المعدل", "amended end date"), dtype="date"),
     _f("effective_end_date", "Amended End Date CR / End Date", "تاريخ الانتهاء", "Effective end date", ("النهاية", "end date", "completion date", "when does it end", "when will it end", "when does it expire"), ("متى ينتهي", "متى يخلص", "ومتى ينتهي"), dtype="date", calculated=True, default=True),
     _f("days_remaining", "Effective End Date", "الأيام المتبقية", "Days remaining", ("كم باقي عليه", "remaining days", "time left", "how much time is left", "remaining time"), ("وش باقي عليه",), dtype="days", calculated=True),
-    _f("project_manager", "Project Manager Name", "مدير المشروع", "Project manager", ("المسؤول عن المشروع", "project manager", "pm name", "who manages", "who is the manager", "manager", "managed by"), ("مديره", "مين مديره", "مين ماسكه", "ومديره"), default=True),
+    _f("project_manager", "Project Manager Name", "مدير المشروع", "Project manager", ("المسؤول عن المشروع", "project manager", "pm name", "who manages", "who is the manager", "manager", "managed by", "مدير", "من مديره", "من المدير"), ("مديره", "مين مديره", "مين ماسكه", "ومديره"), default=True),
     _f("contract_value", "Contract Value", "قيمة العقد الأساسية", "Base contract value",
        dtype="money", unit="SAR", aggregate=True),
     _f("amendment_crs", "Amendment (CRs)", "تعديلات العقد", "Contract amendments", ("طلبات التغيير", "amendments", "crs"), dtype="money", unit="SAR", aggregate=True),
@@ -174,6 +174,57 @@ KPI_ALIASES = {
     "current_year_revenue": ("إيرادات الفترة الحالية", "current revenue"),
     "current_year_cost": ("تكاليف الفترة الحالية", "current cost"),
 }
+
+# Portfolio filter vocabulary for closed-class categorical columns. The
+# `status` enum is small and fixed; department Arabic names cannot be
+# derived from the DB at all (the `Dept.` column stores literal, English,
+# source-truncated values -- confirmed against the raw workbook, not a
+# code-side bug). Both are curated here once so routing, the query builder
+# and the entity resolver share one map instead of drifting apart.
+STATUS_ALIASES: dict[str, tuple[str, ...]] = {
+    "Ongoing": ("نشط", "نشطة", "الناشط", "جاري", "جارية", "شغال", "مستمر", "مستمرة", "قيد التنفيذ",
+                "مفتوح", "مفتوحة", "ongoing", "active", "open"),
+    "Completed": ("منتهي", "منتهية", "مكتمل", "مكتملة", "خلص", "خلصت", "خلاص", "completed", "finished", "done"),
+    "Closed": ("مغلق", "مغلقة", "closed"),
+    "On-hold": ("متوقف", "متوقفة", "معلق", "معلقة", "on-hold", "on hold", "paused"),
+    "Pipeline": ("مخطط", "مخططة", "قيد الدراسة", "تحت الدراسة", "pipeline"),
+}
+
+# Only departments with an Arabic name verified against the official org
+# chart are listed. An unverified guess would silently misroute a filter to
+# the wrong department, which is worse than not matching at all -- new
+# entries must be confirmed before being added, not inferred from the
+# truncated English DB string.
+DEPT_ALIASES: dict[str, tuple[str, ...]] = {
+    "BPO-Specialized Pr": ("إدارة المشاريع المتخصصة", "المشاريع المتخصصة", "متخصصة", "specialized projects"),
+    "BPO - Inspection": ("إدارة التفتيش", "التفتيش", "inspection"),
+    "BPO - Business Cente": ("إدارة مراكز الأعمال", "مراكز الأعمال", "business centers"),
+    "BPO - Process Outsou": ("إدارة إسناد العمليات", "إسناد العمليات", "process outsourcing"),
+    "BPO - Health": ("إدارة الصحة", "الصحة", "الصحية", "health"),
+}
+
+
+def _longest_alias_match(normalized_query: str, aliases: dict[str, tuple[str, ...]]) -> str | None:
+    """Return the canonical key whose longest matching alias appears in the
+    query. Longest-wins so a specific phrase (e.g. a full department name)
+    is never shadowed by a shorter, coincidentally-contained one."""
+    best_key, best_len = None, 0
+    for key, phrases in aliases.items():
+        for phrase in phrases:
+            norm_phrase = normalize_text(phrase)
+            if norm_phrase and norm_phrase in normalized_query and len(norm_phrase) > best_len:
+                best_key, best_len = key, len(norm_phrase)
+    return best_key
+
+
+def detect_status_filter(query: str) -> str | None:
+    """Canonical `status` enum value mentioned in the query, if any."""
+    return _longest_alias_match(normalize_text(query), STATUS_ALIASES)
+
+
+def detect_dept_filter(query: str) -> str | None:
+    """Canonical `Dept.` column value mentioned in the query, if any."""
+    return _longest_alias_match(normalize_text(query), DEPT_ALIASES)
 
 
 def _alias_in_query(alias: str, normalized_query: str) -> bool:
@@ -447,14 +498,22 @@ def detect_portfolio_operation(query: str) -> dict | None:
     if requested is None and any(token in q for token in ("اعمال متبقيه", "باقي فيه", "باك لوق")):
         requested = FIELDS["backlog"]
 
+    # Count/rank semantics have always treated "completed" and "closed" as
+    # one merged bucket ("finished"), regardless of which specific word was
+    # used -- kept intentionally, unlike the exact single-status split used
+    # for listing filters (see detect_status_filter / STATUS_ALIASES).
+    canonical_status = detect_status_filter(query)
     status = None
-    if any(token in q for token in ("جاري", "جاريه", "شغال", "مستمر", "ongoing", "active")):
+    if canonical_status == "Ongoing":
         status = ["Ongoing"]
-    elif any(token in q for token in ("مكتمل", "مكتمله", "منتهي", "منتهيه", "completed", "closed")):
+    elif canonical_status in ("Completed", "Closed"):
         status = ["Completed", "Closed"]
+    elif canonical_status in ("On-hold", "Pipeline"):
+        status = [canonical_status]
+    dept = detect_dept_filter(query)
 
     if project_subject and any(token == q or f"{token} " in q for token in ("كم", "عدد", "how many", "count")):
-        return {"operation": "count", "status": status}
+        return {"operation": "count", "status": status, "dept": dept}
 
     # "أقل مشروع" is a rank; "هامشه أقل من 5" is a numeric filter.
     threshold_comparison = bool(re.search(r"(?:اقل|اعلي|اكثر|ادني)\s+من\s+\d", q))
@@ -471,7 +530,7 @@ def detect_portfolio_operation(query: str) -> dict | None:
             metric = "profit_pct"
         elif any(token in q for token in ("ربحيه", "ربحية", "ربح", "profit")):
             metric = "pl"
-        return {"operation": "rank", "direction": direction, "metric": metric, "status": status}
+        return {"operation": "rank", "direction": direction, "metric": metric, "status": status, "dept": dept}
     return None
 
 

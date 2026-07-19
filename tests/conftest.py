@@ -5,6 +5,22 @@ from datetime import date, timedelta
 
 import pytest
 
+
+def pytest_configure(config):
+    """Redirect pytest's own tmp_path/tmpdir base away from the default
+    "<TEMP>/pytest-of-<user>" directory. On this machine that directory has
+    a corrupted ACL (confirmed via `icacls`/`Get-Acl`, both denied even to
+    its owning account) -- a pre-existing OS-level issue unrelated to this
+    project, but pytest's tmp_path cleanup logic tries to list it on every
+    run and raises PermissionError before any test even starts. Using a
+    project-specific, freshly-created directory sidesteps that corrupted
+    path entirely without needing admin rights to repair/delete it."""
+    if not config.option.basetemp:
+        base = os.path.join(tempfile.gettempdir(), "pytest-project-intelligence-ai")
+        os.makedirs(base, exist_ok=True)
+        config.option.basetemp = base
+
+
 # Point at a throwaway temp SQLite file BEFORE any project module is
 # imported anywhere in the test session, so modules.database's
 # `engine = create_engine(config.DB_URL, ...)` never touches real project

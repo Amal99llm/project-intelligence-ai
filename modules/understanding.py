@@ -35,10 +35,12 @@ from dataclasses import dataclass, field
 import config
 from modules.contract_semantics import parse_future_period_days
 from modules.semantic_dictionary import (
+    detect_dept_filter,
     detect_requested_field,
     detect_semantic_intent,
     detect_small_talk,
     detect_portfolio_operation,
+    detect_status_filter,
     is_contract_document_question,
     is_previous_list_followup,
     normalize_text,
@@ -323,6 +325,20 @@ def understand(query: str, ctx: dict | None = None) -> Understanding:
         return Understanding(
             intent=PORTFOLIO_FILTER, scope=SCOPE_PORTFOLIO,
             filter_intent="numeric_margin", confidence=0.98, method="structural",
+        )
+
+    # A status and/or department reference on a PLURAL "projects" subject is
+    # a portfolio filter, never a project-name lookup -- "المشاريع النشطة في
+    # إدارة المشاريع المتخصصة" must route here before project-name/KPI-alias
+    # heuristics get a chance to treat "النشطة"/"المتخصصة" as part of a name.
+    # Deliberately plural-only (matches query_builder.is_explicit_portfolio_filter):
+    # a singular "هل المشروع نشط؟" is a follow-up about the current/contextual
+    # project, not a request to list the whole portfolio.
+    has_plural_project_subject = any(token in q_norm for token in ("مشاريع", "المشاريع", "projects"))
+    if has_plural_project_subject and (detect_status_filter(query) or detect_dept_filter(query)):
+        return Understanding(
+            intent=PORTFOLIO_FILTER, scope=SCOPE_PORTFOLIO,
+            filter_intent="status_dept_filter", confidence=0.98, method="structural",
         )
 
     # ── Fast path 2: Out of scope (personal/contact) ─────────────────────────

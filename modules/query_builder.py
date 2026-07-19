@@ -24,7 +24,12 @@ from openai import AzureOpenAI
 import config
 from modules import query_schema
 from modules.project_entity_resolver import normalize_project_text
-from modules.semantic_dictionary import detect_portfolio_operation, detect_semantic_intent
+from modules.semantic_dictionary import (
+    detect_dept_filter,
+    detect_portfolio_operation,
+    detect_semantic_intent,
+    detect_status_filter,
+)
 from modules.contract_semantics import parse_future_period_days
 
 logger = logging.getLogger(__name__)
@@ -118,6 +123,10 @@ columns/operators/values from the question belong in the structured spec; a sepa
 executor applies it against the real database. Today's date is provided for "days remaining" style
 questions. If the question needs no filter (e.g. a portfolio-wide total), return an empty filters list.
 
+The 'status' column only ever holds one of these five literal values -- never a translated or
+paraphrased word: Ongoing, Completed, Closed, On-hold, Pipeline. Map the question's wording to one of
+these exactly (e.g. "active"/"نشط" -> Ongoing, "متوقف" -> On-hold, "مخطط" -> Pipeline).
+
 For anything about a contract/project ending, expiring, or "within N days", always filter on the
 precomputed 'days_remaining' column (e.g. between 0 and N) rather than 'end_date' or 'amended_end_date'
 directly -- days_remaining already accounts for amendments and is relative to today's date. Only filter
@@ -163,6 +172,8 @@ def _deterministic_conversational_spec(query: str, today_str: str) -> dict | Non
                 "op": "==" if len(statuses) == 1 else "in",
                 "value": statuses[0] if len(statuses) == 1 else statuses,
             })
+        if operation.get("dept"):
+            filters.append({"column": "dept", "op": "==", "value": operation["dept"]})
         if operation["operation"] == "count":
             return query_schema.validate_query_spec({
                 "filters": filters,
@@ -174,8 +185,12 @@ def _deterministic_conversational_spec(query: str, today_str: str) -> dict | Non
             "limit": 1,
         })
     filters = []
-    if any(term in q for term in ("المشاريع الجاريه", "المشاريع الجارية", "مشروع جاري", "مشروع شغال", "المشاريع المستمره", "ongoing projects")):
-        filters.append({"column": "status", "op": "==", "value": "Ongoing"})
+    status_value = detect_status_filter(query)
+    if status_value:
+        filters.append({"column": "status", "op": "==", "value": status_value})
+    dept_value = detect_dept_filter(query)
+    if dept_value:
+        filters.append({"column": "dept", "op": "==", "value": dept_value})
     if any(term in q for term in ("خسائر", "خاسره", "خاسرة", "loss making", "loss-making")):
         filters.append({"column": "net_profit", "op": "<", "value": 0})
     if any(term in q for term in ("قرب انتهاء", "قريبه من expiry", "قريبة من expiry", "close to contract expiry", "close to expiry")):
@@ -184,8 +199,6 @@ def _deterministic_conversational_spec(query: str, today_str: str) -> dict | Non
         filters.append({"column": "days_remaining", "op": "<", "value": 0})
     if any(term in q for term in ("عندها مخاطر", "فيها مخاطر", "recorded risk", "have risk")):
         filters.append({"column": "risk", "op": ">", "value": 0})
-    if any(term in q for term in ("المكتمله", "المكتملة", "completed projects")):
-        filters.append({"column": "status", "op": "in", "value": ["Completed", "Closed"]})
     contract_threshold = re.search(r"(?:قيمت\w*|worth|contract value)\s*(?:فوق|اكثر من|أكثر من|more than|over|above)\s*(?:sar\s*)?(\d+(?:\.\d+)?)\s*(مليون|million)?", q)
     if contract_threshold:
         multiplier = 1_000_000 if contract_threshold.group(2) else 1
