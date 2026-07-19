@@ -27,6 +27,7 @@ from modules.intent_schema import (
     EXEC_ATTENTION, LIST_FOLLOWUP,
     CONTRACT_DOC, CONTRACT_VALUE,
     GROUPED_ANALYTICS, SMALL_TALK, OUT_OF_SCOPE,
+    CONTROLLED_FALLBACK,
 )
 from modules.understanding import understand, Understanding
 from modules.followup_gate import check as followup_gate_check
@@ -52,6 +53,8 @@ from modules.query_planner import build_plan
 from modules.executive_intelligence import classify_executive_request, execute_executive_request
 from modules.time_utils import riyadh_today
 from modules.conversation_state import transition_for_turn
+import config
+from modules import grouped_analytics, query_compiler, response_layer, semantic_interpreter
 
 logger = logging.getLogger(__name__)
 
@@ -250,9 +253,15 @@ def _resolve_and_respond(query: str, today: date, projects: list, ctx: dict,
     }
 
 
-def _run_pipeline(intent_str: str, query: str, today: date, projects: list):
+def _run_pipeline(intent_str: str, query: str, today: date, projects: list, precompiled_spec: dict | None = None):
+    """`precompiled_spec` lets the semantic-interpreter path (see
+    modules.query_compiler) supply an already-resolved, already-validated
+    spec instead of having this function re-derive one from the raw query
+    text via modules.query_builder -- the same execute/verify/format
+    pipeline either way, so the two paths can never disagree on what a
+    validated spec means, only on how it was produced."""
     try:
-        spec = query_builder.build_query(query, today.isoformat())
+        spec = precompiled_spec if precompiled_spec is not None else query_builder.build_query(query, today.isoformat())
         result = query_executor.execute(spec, today=today, projects=projects)
         verdict = verification.verify(result, today=today)
     except Exception as exc:
@@ -688,31 +697,38 @@ def _handle_comparison(query: str, today: date, ctx: dict, projects: list, upd: 
     return "لم أتمكن من حل طرفي المقارنة. اذكر اسمًا أوضح لكل مشروع.", PROJECT_COMPARISON, None, upd
 
 
+def _small_talk_response(query: str) -> str:
+    """Shared by the default pipeline (_orchestrate) and the semantic-
+    interpreter path (_answer_inner_v2) so the canned reply set exists in
+    exactly one place."""
+    st = detect_small_talk(query)
+    arabic = any("؀" <= c <= "ۿ" for c in query)
+    import random
+    _greet = random.choice([
+        "هلاً وسهلاً! وش تحب تعرف عن المشاريع؟",
+        "أهلاً، يسعدني أساعدك. وش تبي تعرف؟",
+        "هلاً! شو اللي تحب تعرفه عن المشاريع؟",
+    ])
+    responses = {
+        "salam":       "وعليكم السلام ورحمة الله، أهلاً. وش تحب تعرف عن المشاريع؟",
+        "reply_salam": "أهلاً، كيف أقدر أساعدك؟",
+        "greeting":    _greet if arabic else "Hello! What would you like to know?",
+        "morning":     "صباح النور! جاهز لأي سؤال عن المشاريع.",
+        "evening":     "مساء النور! وش تبي تعرف عن المشاريع؟",
+        "wellbeing":   "بخير الحمدلله، شكراً. كيف أخدمك؟",
+        "thanks":      random.choice(["العفو، وتحت أمرك.", "بكل سرور، وش تحتاج؟", "أهلاً وسهلاً دائماً."]),
+        "bye":         random.choice(["مع السلامة، وتحت أمرك.", "يعطيك العافية، إلى اللقاء.", "في أمان الله."]),
+    }
+    return responses.get(st, "أقدر أساعدك في بيانات المشاريع.")
+
+
 # ── Main orchestrator ─────────────────────────────────────────────────────────
 
 def _orchestrate(u: Understanding, query: str, today: date, ctx: dict, projects: list) -> tuple:
     upd: dict = {}
 
     if u.intent == SMALL_TALK:
-        st = detect_small_talk(query)
-        arabic = any("\u0600" <= c <= "\u06ff" for c in query)
-        import random
-        _greet = random.choice([
-            "هلاً وسهلاً! وش تحب تعرف عن المشاريع؟",
-            "أهلاً، يسعدني أساعدك. وش تبي تعرف؟",
-            "هلاً! شو اللي تحب تعرفه عن المشاريع؟",
-        ])
-        responses = {
-            "salam":       "وعليكم السلام ورحمة الله، أهلاً. وش تحب تعرف عن المشاريع؟",
-            "reply_salam": "أهلاً، كيف أقدر أساعدك؟",
-            "greeting":    _greet if arabic else "Hello! What would you like to know?",
-            "morning":     "صباح النور! جاهز لأي سؤال عن المشاريع.",
-            "evening":     "مساء النور! وش تبي تعرف عن المشاريع؟",
-            "wellbeing":   "بخير الحمدلله، شكراً. كيف أخدمك؟",
-            "thanks":      random.choice(["العفو، وتحت أمرك.", "بكل سرور، وش تحتاج؟", "أهلاً وسهلاً دائماً."]),
-            "bye":         random.choice(["مع السلامة، وتحت أمرك.", "يعطيك العافية، إلى اللقاء.", "في أمان الله."]),
-        }
-        return responses.get(st, "أقدر أساعدك في بيانات المشاريع."), SMALL_TALK, None, upd
+        return _small_talk_response(query), SMALL_TALK, None, upd
 
     if u.intent == OUT_OF_SCOPE:
         boundary = classify_boundary(query)
@@ -1168,6 +1184,136 @@ def _answer_inner(query: str, today: date, ctx: dict) -> tuple:
     return _orchestrate(u, query, today, ctx, projects)
 
 
+_V2_HANDLED_INTENTS = {
+    PORTFOLIO_FILTER, PORTFOLIO_RANKING, GROUPED_ANALYTICS,
+    PORTFOLIO_KPI, PORTFOLIO_SUMMARY, EXEC_ATTENTION, SMALL_TALK,
+}
+
+
+def _answer_inner_v2(query: str, today: date, ctx: dict) -> tuple | None:
+    """Semantic-interpreter-driven path (see the architecture plan),
+    gated by config.SEMANTIC_INTERPRETER_ENABLED. Returns None to signal
+    "defer to the existing _answer_inner path" whenever: a disambiguation/
+    pending-clarification reply is in flight (that machinery is not
+    rebuilt here -- _try_resolve_pending already handles it and callers
+    must keep using it, not a second implementation), the interpreter
+    itself failed/timed out, or the classified intent isn't one this path
+    implements yet. A resolved entity that still can't be matched with
+    confidence surfaces its own focused clarification question directly
+    (a complete, valid turn, not a deferral).
+
+    Every OTHER intent (project lookups, comparisons, contract questions,
+    executive requests, list follow-ups) is intentionally left to the
+    existing pipeline this session -- only the intents behind last turn's
+    bug (portfolio_filter/ranking/grouped_analytics) get the new
+    resolved-entity compile path; portfolio_kpi/portfolio_summary/
+    executive_attention/small_talk reuse their existing, already-correct
+    handlers unchanged, exercised through the new router as a first
+    integration step.
+
+    Does not itself guard every internal call with a try/except: the
+    caller in answer() wraps this whole function in one, which is the
+    final safety net for anything unexpected (including
+    modules.response_layer's internal-name leak guard, which is meant to
+    raise and be caught there, sending that turn through the untouched
+    fallback path rather than ever surfacing a leak).
+    """
+    # Pending clarification/disambiguation replies keep using the existing,
+    # well-tested resolver -- not duplicated here.
+    if ctx.get("pending_project_confirmation") or ctx.get("last_disambiguation_options"):
+        return None
+
+    projects = fetch_enriched_projects(today=today)
+    interpretation = semantic_interpreter.interpret(query, ctx, projects=projects)
+
+    if interpretation.method == "llm_error":
+        return None
+
+    # The intent-ownership check must come BEFORE the clarification check.
+    # An entity that fails to resolve on a query the new path doesn't even
+    # own (e.g. a project_summary-shaped question the model mistags an
+    # entity on) must defer to the legacy path -- which may well resolve it
+    # correctly on its own -- never get intercepted into a clarification
+    # dead-end for an intent this path was never responsible for answering.
+    if interpretation.intent not in _V2_HANDLED_INTENTS:
+        return None
+
+    if interpretation.requires_clarification:
+        return interpretation.clarification_question, CONTROLLED_FALLBACK, None, {}
+
+    upd: dict = {}
+
+    if interpretation.intent == SMALL_TALK:
+        text = _small_talk_response(query)
+        response_layer.assert_no_internal_leakage(text)
+        return text, SMALL_TALK, None, upd
+
+    if interpretation.intent == PORTFOLIO_SUMMARY:
+        kpis = calculate_executive_kpis(projects, today=today)
+        text = response_formatter.format_portfolio_summary(kpis)
+        response_layer.assert_no_internal_leakage(text)
+        upd["last_result_type"] = "portfolio_summary"
+        upd["last_result_scope"] = "portfolio"
+        return text, PORTFOLIO_KPI, None, upd
+
+    if interpretation.intent == EXEC_ATTENTION:
+        text = format_attention_summary(projects, today)
+        response_layer.assert_no_internal_leakage(text)
+        upd["last_result_type"] = "executive_attention"
+        upd["last_result_scope"] = "portfolio"
+        return text, EXEC_ATTENTION, None, upd
+
+    if interpretation.intent == PORTFOLIO_KPI:
+        kpi_r = answer_kpi_question(query, today=today, projects=projects, context=ctx)
+        if not kpi_r:
+            return None
+        response_layer.assert_no_internal_leakage(kpi_r["answer"])
+        if kpi_r.get("kpi_name"):
+            upd["last_kpi_name"] = kpi_r["kpi_name"]
+            upd["last_result_scope"] = "portfolio"
+            upd["last_result_type"] = "portfolio_kpi"
+        return kpi_r["answer"], PORTFOLIO_KPI, kpi_r.get("source"), upd
+
+    if interpretation.intent in {PORTFOLIO_FILTER, PORTFOLIO_RANKING}:
+        try:
+            spec = query_compiler.compile_query_spec(interpretation)
+        except query_compiler.CompileError as exc:
+            logger.info("v2 query_compiler declined, deferring to legacy path: %s", exc)
+            return None
+        text, src = _run_pipeline(interpretation.intent, query, today, projects, precompiled_spec=spec)
+        if text == verification.FALLBACK_MESSAGE:
+            return None
+        response_layer.assert_no_internal_leakage(text)
+        upd.update(_list_ctx(src))
+        upd["last_result_type"] = (
+            "portfolio_ranking" if interpretation.intent == PORTFOLIO_RANKING else "portfolio_filter"
+        )
+        return text, interpretation.intent, src, upd
+
+    if interpretation.intent == GROUPED_ANALYTICS:
+        try:
+            entities = query_compiler.compile_grouped_entities(interpretation)
+        except query_compiler.CompileError as exc:
+            logger.info("v2 query_compiler declined grouped entities, deferring: %s", exc)
+            return None
+        try:
+            result = grouped_analytics.execute_grouped(projects, entities)
+        except ValueError as exc:
+            logger.warning("v2 grouped_analytics execution rejected: %s", exc)
+            return None
+        # grouped_analytics.format_grouped echoes the raw bucket value
+        # (e.g. the truncated dept literal "BPO - Business Cente", or the
+        # raw English status enum) straight into the winning-group label --
+        # translate it to business Arabic before formatting, never after.
+        for row in result["rows"]:
+            row["group"] = response_layer.translate_group_label(result["group_by"], row["group"])
+        text = grouped_analytics.format_grouped(result)
+        response_layer.assert_no_internal_leakage(text)
+        return text, GROUPED_ANALYTICS, None, upd
+
+    return None
+
+
 def answer(query: str, user_id: str = "anonymous",
            source: str = "flask_ui", ip_address: str = "",
            session_id: str | None = None) -> dict:
@@ -1177,13 +1323,24 @@ def answer(query: str, user_id: str = "anonymous",
     today = riyadh_today()
     session_id = session_id or "no-session"
     ctx = session_context.get_context(session_id)
-    try:
-        response_text, query_type, source_info, ctx_updates = _answer_inner(query, today, ctx)
-    except Exception:
-        logger.exception("Unhandled error: %.60s", query)
-        response_text, query_type, source_info, ctx_updates = (
-            verification.FALLBACK_MESSAGE, "error", None, {}
-        )
+    v2_result = None
+    if config.SEMANTIC_INTERPRETER_ENABLED:
+        try:
+            v2_result = _answer_inner_v2(query, today, ctx)
+        except Exception:
+            logger.warning("semantic_interpreter path failed, falling back to legacy pipeline: %.60s",
+                            query, exc_info=True)
+            v2_result = None
+    if v2_result is not None:
+        response_text, query_type, source_info, ctx_updates = v2_result
+    else:
+        try:
+            response_text, query_type, source_info, ctx_updates = _answer_inner(query, today, ctx)
+        except Exception:
+            logger.exception("Unhandled error: %.60s", query)
+            response_text, query_type, source_info, ctx_updates = (
+                verification.FALLBACK_MESSAGE, "error", None, {}
+            )
     # One commit per completed turn, regardless of execution route.  Handlers
     # describe their result; only this boundary writes conversation state.
     turn_updates = {

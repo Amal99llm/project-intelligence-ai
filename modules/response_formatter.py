@@ -204,13 +204,28 @@ def format_answer(query: str, verified_data: dict) -> str:
         return (f"{label_ar}: {rendered}." if arabic else f"{label_en}: {rendered}.")
 
     if not rows:
-        from modules.semantic_dictionary import detect_semantic_intent as _dsi
+        from modules.semantic_dictionary import DEPT_ALIASES, detect_semantic_intent as _dsi
         _sem = _dsi(query) if query else None
         _no_match_msgs = {
             "expiring": "ما في عقود تنتهي خلال 30 يوماً القادمة وفق البيانات الحالية.",
             "losing_projects": "ما في مشاريع بربحية سالبة حالياً.",
             "overdue": "ما في مشاريع تجاوزت تاريخ انتهائها.",
         }
+        # A status/department filter with zero matches is a real, specific
+        # answer (e.g. "no ongoing projects in that department"), not a
+        # failure to identify a project name -- the two must never share
+        # generic "give me the project name" wording.
+        status_filter = next((f for f in spec.get("filters", []) if f.get("column") == "status"), None)
+        dept_filter = next((f for f in spec.get("filters", []) if f.get("column") == "dept"), None)
+        if arabic and (status_filter or dept_filter):
+            qualifiers = []
+            if status_filter:
+                statuses = status_filter["value"] if isinstance(status_filter["value"], list) else [status_filter["value"]]
+                qualifiers.append(" أو ".join(_status({"status": s}) for s in statuses))
+            if dept_filter:
+                dept_value = dept_filter["value"]
+                qualifiers.append(f"في {DEPT_ALIASES.get(dept_value, (dept_value,))[0]}")
+            return f"لا توجد مشاريع {' '.join(qualifiers)} حسب البيانات الحالية.".strip()
         if arabic:
             _generic = [
                 "ما وجدت مشاريع مطابقة — جرّب صياغة مختلفة أو أعطني اسم المشروع.",

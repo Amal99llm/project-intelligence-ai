@@ -38,13 +38,14 @@ MAX_AMBIGUOUS_CANDIDATES = 20
 # Words that describe the request rather than the entity.  They are removed
 # only from the user phrase, never from stored database values.
 _REQUEST_WORDS = {
-    "اعطني", "اعطيني", "ابي", "ابغي", "اريد", "احتاج", "لو", "سمحت",
+    "اعطني", "اعطيني", "عطني", "عطيني", "ابي", "ابغي", "اريد", "احتاج", "لو", "سمحت",
     "من", "فضلك", "ملخص", "لخص", "تفاصيل", "معلومات", "بيانات", "عن",
-    "مشروع", "المشروع", "ومشروع", "وعن", "حاله", "وضع", "وش", "كيف", "صار", "عليه", "علومه",
-    "حق", "تبع", "الخاص", "ب", "اللي", "اسمه", "ذا", "هذا",
+    "مشروع", "المشروع", "ومشروع", "مشاريع", "المشاريع", "ومشاريع", "كل", "جميع",
+    "وعن", "حاله", "وضع", "وش", "كيف", "صار", "عليه", "علومه",
+    "حق", "تبع", "الخاص", "ب", "اللي", "اسمه", "ذا", "هذا", "في",
     "ما", "هو", "هي", "لي", "اظهر", "اعرض",
     "show", "give", "me", "summary", "details", "information", "about",
-    "project", "the", "please", "status", "of",
+    "project", "projects", "all", "the", "please", "status", "of", "in",
     # Financial / contract request words
     "كم", "ما", "اخبرني", "قل", "هل",
     "قيمه", "قيمة", "قيم",
@@ -183,9 +184,13 @@ def _resolve_project_legacy(query: str, projects: Iterable[Mapping[str, Any]]) -
 
     # A. Exact canonical identifier match anywhere in the question. WBS/PC
     # identifiers resolve to the canonical project_code used downstream.
+    # `program` is included here rather than treated as a grouping filter --
+    # in the source data every project has its own distinct program code
+    # (it is effectively a second per-project identifier, not a category
+    # multiple projects share), so it belongs with the other identifiers.
     code_matches = []
     for project in portfolio:
-        for key in ("project_code", "wbs_pc", "wbs", "pc"):
+        for key in ("project_code", "wbs_pc", "wbs", "pc", "program"):
             identifier = str(project.get(key) or "").strip()
             if identifier and re.search(
                 rf"(?<!\w){re.escape(identifier)}(?!\w)", raw_query, re.IGNORECASE

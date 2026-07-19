@@ -87,8 +87,16 @@ def _extract_period(query: str) -> tuple[int, bool]:
 def classify_executive_request(query: str) -> ExecutiveRequest | None:
     """Classify concepts before entity resolution into controlled operations."""
     q = normalize_text(query)
+    q_tokens = set(q.split())
     analyses: list[AnalysisType] = []
-    meeting = any(x in q for x in ("اجتماع", "dashboard", "داشبورد", "الزبده التنفيذيه", "الزبدة التنفيذية"))
+    # "اجتماع" (meeting) must be an exact token match, not a substring --
+    # a plain substring check false-positives on "اجتماعي" (social/societal),
+    # which silently hijacked any query mentioning a project whose name
+    # contains that word (e.g. "الباحث الاجتماعي الثاني") into an unrelated
+    # portfolio-wide executive brief instead of resolving the project.
+    meeting = bool({"اجتماع", "الاجتماع", "اجتماعات", "الاجتماعات"} & q_tokens) or any(
+        x in q for x in ("dashboard", "داشبورد", "الزبده التنفيذيه", "الزبدة التنفيذية")
+    )
     priority = any(x in q for x in ("تحتاج متابعه", "يحتاج متابعه", "تحتاج تدخل", "يحتاج تدخل", "تدخل الاداره", "الاولويات", "المقلقه", "مقلقه", "تصعيد"))
     risk = "مخاطر" in q or "مخاطره" in q
     renewal = "تجديد" in q and ("العقود" in q or "عقود" in q)

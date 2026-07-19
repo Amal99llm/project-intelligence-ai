@@ -60,6 +60,18 @@ AZURE_OPENAI_API_VERSION = os.environ.get(
 AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
 AI_REQUEST_TIMEOUT_SECONDS = float(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS", "8"))
 
+# ── Semantic interpreter (opt-in, off by default) ───────────────────────────
+# Gates modules.ai_engine's new centralized semantic-interpretation path
+# (modules.semantic_interpreter / entity_resolvers / query_compiler). When
+# false (the default -- every existing deployment and test run), behavior is
+# byte-for-byte identical to before this flag existed: modules.ai_engine.answer
+# always uses the original _answer_inner path. When true, _answer_inner_v2 is
+# attempted first and falls back to _answer_inner on any error, timeout, or
+# low-confidence/unsupported result -- never a hard failure on its own.
+SEMANTIC_INTERPRETER_ENABLED = os.environ.get(
+    "SEMANTIC_INTERPRETER_ENABLED", "false"
+).strip().lower() in {"1", "true", "yes", "on"}
+
 # ── ChromaDB ──────────────────────────────────────────────────────────────────
 CHROMA_COLLECTION = "contracts"
 
