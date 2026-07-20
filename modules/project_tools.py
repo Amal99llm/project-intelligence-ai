@@ -2,7 +2,7 @@
 from __future__ import annotations
 import re, unicodedata
 from difflib import SequenceMatcher
-from modules import data_service
+from modules import business_glossary, data_service
 
 def normalize_arabic(text):
     text = unicodedata.normalize("NFKD", str(text or "")); text = "".join(c for c in text if not unicodedata.combining(c))
@@ -16,6 +16,8 @@ def search_projects(search_text, status=None, department=None, program=None, man
     if query.startswith("و") and " " not in query: query = query[1:]
     query = ALIASES.get(query, query)
     if not query: return []
+    resolved = business_glossary.resolve_filters({"status": status, "department": department})
+    status, department = resolved.get("status"), resolved.get("department")
     scored = []
     for row in data_service.list_search_rows({"status": status, "department": department, "program": program, "manager": manager, "category": category}):
         values = [row.get("project_name_ar"), row.get("project_name_en"), row.get("project_id"), row.get("wbs"), row.get("program")]
@@ -29,8 +31,10 @@ def search_projects(search_text, status=None, department=None, program=None, man
     scored.sort(key=lambda item: (-item[0], item[1]["project_name"])); return [{**r, "score": round(s, 3)} for s, r in scored[:max(1, min(int(limit), 20))]]
 
 def get_project_fields(project_identifier, canonical_fields): return data_service.get_fields(project_identifier, canonical_fields)
-def filter_projects(filters, sort=None, limit=10): return data_service.filter_rows(filters, sort, limit)
-def aggregate_portfolio(metric, aggregation, filters=None, group_by=None): return data_service.aggregate(metric, aggregation, filters, group_by)
+def filter_projects(filters, sort=None, limit=10):
+    return data_service.filter_rows(business_glossary.resolve_filters(filters), sort, limit)
+def aggregate_portfolio(metric, aggregation, filters=None, group_by=None):
+    return data_service.aggregate(metric, aggregation, business_glossary.resolve_filters(filters), group_by)
 def compare_projects(project_identifiers, canonical_fields):
     return [data_service.get_fields(i, canonical_fields) for i in project_identifiers]
 def get_contract_context(project_identifier, contract_question):

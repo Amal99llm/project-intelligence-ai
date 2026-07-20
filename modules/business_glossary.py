@@ -1,6 +1,9 @@
 """Canonical business vocabulary for chat engine v2."""
 from __future__ import annotations
 
+import re as _re
+import unicodedata as _unicodedata
+
 FIELD_MAP = {
     "project_type": "project_type", "project_category": "category", "program": "program",
     "project_definition": "project_definition", "wbs_pc": "wbs_pc", "wbs": "wbs",
@@ -65,3 +68,64 @@ def column_for(field: str) -> str:
     if field == "effective_end_date": return "amended_end_date"
     if field not in FIELD_MAP: raise ValueError(f"Unsupported canonical field: {field}")
     return FIELD_MAP[field]
+
+
+# ── Arabic filter-value aliases ──────────────────────────────────────────────
+# Deterministic mapping from natural Saudi-Arabic phrasing to the actual
+# distinct database values, per the business glossary. This is intentionally
+# a plain dict, not a new architecture layer: project_tools calls
+# resolve_filters() once before handing filters to data_service, so Azure
+# does not have to guess the exact stored spelling and a mis-transliteration
+# from the model never silently returns zero results.
+#
+# NOTE: only the two production values you already confirmed in writing
+# ("Ongoing" for status, "BPO-Specialized Pr" for department) are wired up
+# below. Extend these two dicts with the rest of the real distinct values
+# from SELECT DISTINCT status / SELECT DISTINCT dept once you have them --
+# I did not pull real values from the pasted export.
+
+def _normalize(text) -> str:
+    text = _unicodedata.normalize("NFKD", str(text or ""))
+    text = "".join(c for c in text if not _unicodedata.combining(c))
+    text = text.translate(str.maketrans("أإآٱى", "ااااي"))
+    text = _re.sub(r"[^\w\s]", " ", text.lower(), flags=_re.UNICODE)
+    return _re.sub(r"\s+", " ", text).strip()
+
+_STATUS_ALIASES_RAW = {
+    "نشط": "Ongoing", "نشطة": "Ongoing", "جاري": "Ongoing", "جارية": "Ongoing",
+    "مفتوح": "Ongoing", "قيد التنفيذ": "Ongoing", "ongoing": "Ongoing",
+}
+_DEPARTMENT_ALIASES_RAW = {
+    "إدارة المشاريع المتخصصة": "BPO-Specialized Pr",
+    "المشاريع المتخصصة": "BPO-Specialized Pr",
+    "المتخصصة": "BPO-Specialized Pr",
+    "bpo specialized pr": "BPO-Specialized Pr",
+}
+STATUS_ALIASES = {_normalize(k): v for k, v in _STATUS_ALIASES_RAW.items()}
+DEPARTMENT_ALIASES = {_normalize(k): v for k, v in _DEPARTMENT_ALIASES_RAW.items()}
+FILTER_ALIASES = {"status": STATUS_ALIASES, "department": DEPARTMENT_ALIASES}
+
+# Arabic display labels for status values shown back to the user (response
+# formatting only -- never used for filtering/matching). Extend as you
+# confirm the remaining real status values.
+STATUS_DISPLAY_AR = {
+    "Ongoing": "جارٍ", "Completed": "منتهٍ", "On Hold": "متوقف", "Cancelled": "ملغى",
+}
+
+
+def resolve_filter_value(key: str, value):
+    if value is None:
+        return value
+    aliases = FILTER_ALIASES.get(key)
+    if not aliases:
+        return value
+    return aliases.get(_normalize(value), value)
+
+
+def resolve_filters(filters: dict | None) -> dict | None:
+    """Translate Arabic aliases in status/department filter values to the
+    real stored database values. Values already matching real values (or
+    keys with no alias table) pass through unchanged."""
+    if not filters:
+        return filters
+    return {key: resolve_filter_value(key, value) for key, value in filters.items()}

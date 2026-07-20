@@ -17,7 +17,19 @@ from modules.time_utils import riyadh_today
 
 YES = {"اي", "ايوه", "نعم", "صح", "تمام"}
 ORDINALS = {"1": 0, "الأول": 0, "الاول": 0, "2": 1, "الثاني": 1, "3": 2, "الثالث": 2}
-CORRECTIONS = ("مو", "مش", "ليس", "لا أقصد", "ما أقصد", "أقصد", "قصدي", "قلت", "بدل", "غير")
+CORRECTIONS = ("مو", "مش", "ليس", "لا أقصد", "ما أقصد", "أقصد", "قصدي", "قلت", "بدل", "غير", "لا")
+# Word-boundary matching only -- a plain `word in query` substring check
+# false-positives constantly, e.g. "مش" (not) matches inside "المشروع"
+# (project) itself, so nearly every question naming the project got a
+# spurious "تصحيحًا:" correction prefix. Boundaries are whitespace,
+# string edges, or Arabic/Latin punctuation.
+_CORRECTION_PATTERN = re.compile(
+    r"(?:^|[\s،,])(?:" + "|".join(re.escape(word) for word in CORRECTIONS) + r")(?=$|[\s،,])"
+)
+
+
+def _has_correction(text: str) -> bool:
+    return bool(_CORRECTION_PATTERN.search(text or ""))
 CANONICAL_FIELDS = sorted(set(FIELD_MAP) | {"effective_end_date"})
 
 METRICS = [
@@ -90,11 +102,23 @@ SELECTOR_PROMPT = """أنت مفسر محادثة عربي سعودي. افهم 
 الأولوية: تصحيح الرسالة الحالية، ثم مقياسها الصريح، ثم مشروعها الصريح، ثم المشروع النشط، ثم المقياس السابق.
 إذا ذُكر مشروع جديد استخدم search_projects. إذا كان المشروع النشط هو المقصود استخدم get_project_fields واطلب فقط الحقول اللازمة.
 عبارات الباقي المالي أو باقي الشغل تعني backlog. "كم جاب وكم كلف" تعني revenue وtotal_cost.
-استخدم project_identifier الموجود بالحالة فقط؛ لا تخترع معرفاً."""
+استخدم project_identifier الموجود بالحالة فقط؛ لا تخترع معرفاً.
+
+نطاق المحفظة: عندما تكون active_scope في الحالة تساوي "portfolio"، أو عندما يسأل المستخدم عن عدد
+المشاريع أو قائمة المشاريع أو فلترة/تجميع على مستوى المحفظة، لا تستخدم المشروع النشط ولا اسمه كمرشح
+إطلاقاً؛ استخدم aggregate_portfolio أو filter_projects بدون أي إشارة للمشروع النشط، إلا إذا ذكر
+المستخدم صراحة اسم مشروع في نفس الرسالة. لعدّ المشاريع استخدم aggregate_portfolio مع
+aggregation="count" ومقياس ثابت الوجود مثل status، مع الفلاتر المطلوبة فقط (مثلاً status).
+لا تُترجم قيم status أو department بنفسك ولا تخترع تهجئة؛ مرّر ما فهمته من كلام المستخدم كما هو
+(عربياً أو إنجليزياً) وسيتم تحويله تلقائياً للقيمة الفعلية في قاعدة البيانات."""
 
 COMPOSER_PROMPT = """اكتب جواباً عربياً سعودياً طبيعياً ومختصراً من نتيجة الأداة الموثقة فقط.
 لا تحسب ولا تضف رقماً أو سبباً أو توصية. اذكر اسم المشروع. استخدم ريال للقيم المالية و% للنسب.
-لا تعرض أسماء الحقول الداخلية. أجب عن سؤال الرسالة الحالية تحديداً، لا عن المقياس السابق."""
+للقيم المالية الكبيرة استخدم الصيغة العربية المختصرة الموجودة في نتيجة الأداة (مليون/مليار) بدل الرقم الكامل.
+لا تعرض أسماء الحقول الداخلية أو أي رمز إنجليزي بصيغة snake_case (مثل end_date أو project_id) إطلاقاً.
+عندما تحتوي نتيجة الأداة على عدة حقول (ملخص، وضع، وضع مالي، مخاطر)، اجمعها في فقرة عربية واحدة طبيعية
+مختصرة تشبه حديث مدير تنفيذي، لا قائمة نقطية ولا تعداد أسماء حقول. أجب عن سؤال الرسالة الحالية تحديداً،
+لا عن المقياس السابق."""
 
 
 def _minimal_state(state):
@@ -152,7 +176,7 @@ def _compose_generic(query, state, tool_name, tool_result, arguments):
 def _explicit_metric(message):
     norm = project_tools.normalize_arabic(message)
     positive = norm
-    if any(word in message for word in CORRECTIONS) and ("أقصد" in message or "اقصد" in norm or "،" in message or "," in message):
+    if _has_correction(message) and ("أقصد" in message or "اقصد" in norm or "،" in message or "," in message):
         positive = project_tools.normalize_arabic(re.split(r"أقصد|اقصد|،|,", message)[-1])
     if "باقي" in norm and ("ينتهي" in norm or "يخلص" in norm or "النهايه" in norm) and not any(x in norm for x in ("ايراد", "فلوس", "مالي", "شغل")):
         return "days_remaining"
@@ -272,8 +296,25 @@ def _answer_project(query, state, result, fields, today, correction, use_azure):
     return fallback
 
 
+def _composite_turn(query, state, today, metric):
+    """Handle summary/situation/financial/risks/revenue_and_cost questions
+    deterministically. Azure's get_project_fields tool can only request
+    individual canonical columns (its enum is CANONICAL_FIELDS, not
+    COMPOSITES), so if this were left to tool selection the model would
+    always narrow a composite question down to a single field (e.g. only
+    'status' for 'وش وضعه؟'). The trigger phrases themselves are already
+    fully deterministic per the glossary, so no model judgment is needed
+    to resolve them -- only to compose the final prose."""
+    state = v2_set_metric(state, metric)
+    fields = COMPOSITES[metric]
+    result = project_tools.get_project_fields(state["active_project_id"], fields)
+    correction = _has_correction(query)
+    text = _answer_project(query, state, result, fields, today, correction, bool(config.AZURE_OPENAI_KEY))
+    return state, {"answer": text, "query_type": "project_fields"}
+
+
 def _deterministic_turn(query, state, today):
-    correction = any(word in query for word in CORRECTIONS)
+    correction = _has_correction(query)
     candidates = project_tools.search_projects(query, limit=5)
     chosen = None
     if candidates:
@@ -310,7 +351,17 @@ def answer(query, session_id, today=None):
         _state_update(session_id, state)
         return {"answer": f"تم اختيار مشروع «{chosen['project_name']}». وش حاب تعرف عنه؟", "query_type": "project_selected"}
     if "ارجع للمحفظه" in norm or "ارجع للمحفظة" in query:
+        # Leaving project scope must not leave a stale active_project_id
+        # behind -- otherwise every portfolio KPI/count/filter question
+        # right after this keeps getting silently scoped to that project.
+        # last_active_project_id is preserved separately so "ارجع للمشروع"
+        # can still restore it later.
+        if state.get("active_project_id"):
+            state["last_active_project_id"] = state["active_project_id"]
         state["active_scope"] = "portfolio"
+        state["active_project_id"] = None
+        state["active_project_name"] = None
+        state["active_metric"] = None
         _state_update(session_id, state)
         return {"answer": "رجعنا للمحفظة. وش حاب تعرف عنها؟", "query_type": "portfolio"}
     if "ارجع" in norm and state.get("last_active_project_id"):
@@ -320,18 +371,29 @@ def answer(query, session_id, today=None):
         if previous and (named_previous or len(norm.split()) <= 2):
             state = v2_activate_project(state, previous["project_id"], previous["project_name"])
             _state_update(session_id, state)
-            return {"answer": f"رجعنا لمشروع «{previous['project_name']}». وش حاب تعرف؟", "query_type": "project"}
+            return {"answer": f"رجعنا لمشروع «{previous['project_name']}». وش حاب تعرف عنه؟", "query_type": "project"}
     if norm.startswith("ارجع "):
         target = norm.removeprefix("ارجع ").lstrip("ل")
         matches = project_tools.search_projects(target, limit=5)
-        if len(matches) == 1:
-            state = v2_activate_project(state, matches[0]["project_id"], matches[0]["project_name"])
+        strong = [m for m in matches if m["score"] >= .88]
+        if len(strong) == 1 or len(matches) == 1:
+            chosen = strong[0] if strong else matches[0]
+            state = v2_activate_project(state, chosen["project_id"], chosen["project_name"])
             _state_update(session_id, state)
-            return {"answer": f"رجعنا لمشروع «{matches[0]['project_name']}». وش حاب تعرف؟", "query_type": "project"}
+            return {"answer": f"رجعنا لمشروع «{chosen['project_name']}». وش حاب تعرف عنه؟", "query_type": "project"}
         if len(matches) > 1:
             state["last_project_candidates"] = matches
             _state_update(session_id, state)
             return {"answer": _clarify(matches), "query_type": "clarification"}
+
+    metric_hint = _explicit_metric(query)
+    if metric_hint in COMPOSITES and state.get("active_project_id"):
+        top = project_tools.search_projects(query, limit=1)
+        switching_project = bool(top) and top[0]["score"] >= .88 and top[0]["project_id"] != state["active_project_id"]
+        if not switching_project:
+            state, response = _composite_turn(query, state, today, metric_hint)
+            _state_update(session_id, state)
+            return response
 
     azure_enabled = bool(config.AZURE_OPENAI_KEY)
     if azure_enabled:
@@ -347,7 +409,7 @@ def answer(query, session_id, today=None):
                     state = v2_set_metric(state, metric)
                     fields = COMPOSITES.get(metric, ["effective_end_date" if metric == "days_remaining" else metric])
                     result = project_tools.get_project_fields(state["active_project_id"], fields)
-                    text = _answer_project(query, state, result, fields, today, any(w in query for w in CORRECTIONS), True)
+                    text = _answer_project(query, state, result, fields, today, _has_correction(query), True)
                     _state_update(session_id, state)
                     return {"answer": text, "query_type": "project_fields"}
                 _state_update(session_id, state)
@@ -356,7 +418,7 @@ def answer(query, session_id, today=None):
                 result, fields = _verified_project_result(state, arguments)
                 metric = next((key for key, value in COMPOSITES.items() if value == fields), fields[0])
                 state = v2_set_metric(state, metric)
-                text = _answer_project(query, state, result, fields, today, any(w in query for w in CORRECTIONS), True)
+                text = _answer_project(query, state, result, fields, today, _has_correction(query), True)
                 state["last_intent"] = "project_fields"
                 _state_update(session_id, state)
                 return {"answer": text, "query_type": "project_fields"}

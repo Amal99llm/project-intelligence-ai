@@ -4,13 +4,20 @@ from __future__ import annotations
 from datetime import date, datetime
 import re
 
-from modules.business_glossary import CURRENCY_FIELDS, LABELS, PERCENT_FIELDS
+from modules.business_glossary import CURRENCY_FIELDS, LABELS, PERCENT_FIELDS, STATUS_DISPLAY_AR
 
 INTERNAL_NAMES = {
     "profit_pct", "effective_end_date", "portfolio_filter", "rule_flags", "raw_data",
     "project_id", "project_name", "canonical_fields", "revenue_current", "pl", "dept",
-    "amendment_crs", "progress_completed", "net_etc", "etc_pct",
+    "amendment_crs", "progress_completed", "net_etc", "etc_pct", "end_date", "start_date",
+    "amended_end_date",
 }
+
+# Catches any raw snake_case identifier (e.g. "end_date", "project_manager")
+# that the composer echoed instead of an Arabic label. A legitimate Arabic
+# answer never contains an underscore-joined lowercase English token, so
+# this is a safe global guard rather than a fixed, gameable name list.
+_INTERNAL_TOKEN = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
 FIELD_CUES = {
     "backlog": ("المتبقي", "باقي", "الأعمال"), "revenue": ("الإيراد", "جاب"),
     "total_revenue": ("الإيرادات",), "total_cost": ("التكلفة", "كلف", "صرف"),
@@ -22,17 +29,34 @@ FIELD_CUES = {
 
 
 def _number(value):
-    return f"{value:,.2f}".rstrip("0").rstrip(".")
+    text = f"{value:,.2f}"
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _magnitude_number(value):
+    """Render a large currency value using Arabic business shorthand
+    (مليون / مليار) per the business glossary, instead of a raw long
+    number. Values under one million keep the grouped-decimal format."""
+    value = float(value)
+    sign = "-" if value < 0 else ""
+    magnitude = abs(value)
+    if magnitude >= 1_000_000_000:
+        return f"{sign}{_number(magnitude / 1_000_000_000)} مليار"
+    if magnitude >= 1_000_000:
+        return f"{sign}{_number(magnitude / 1_000_000)} مليون"
+    return f"{sign}{_number(magnitude)}"
 
 
 def format_value(field, value):
     if value is None:
         return None
     if field in CURRENCY_FIELDS:
-        return f"{_number(value)} ريال"
+        return f"{_magnitude_number(value)} ريال"
     if field in PERCENT_FIELDS:
         number = float(value) * 100 if field == "progress" and abs(float(value)) <= 1 else float(value)
         return f"{_number(number)}%"
+    if field == "status":
+        return STATUS_DISPLAY_AR.get(value, value)
     if isinstance(value, (date, datetime)):
         return value.strftime("%d/%m/%Y")
     return str(value)
@@ -85,7 +109,7 @@ def validate(answer, tool_result, requested_fields):
     if not isinstance(answer, str) or not answer.strip():
         return False
     lowered = answer.lower()
-    if any(name.lower() in lowered for name in INTERNAL_NAMES):
+    if any(name.lower() in lowered for name in INTERNAL_NAMES) or _INTERNAL_TOKEN.search(lowered):
         return False
     if tool_result.get("project_name") and tool_result["project_name"] not in answer:
         return False
@@ -117,7 +141,7 @@ def validate_generic(answer, tool_result, metric=None):
     if not isinstance(answer, str) or not answer.strip():
         return False
     lowered = answer.lower()
-    if any(name.lower() in lowered for name in INTERNAL_NAMES):
+    if any(name.lower() in lowered for name in INTERNAL_NAMES) or _INTERNAL_TOKEN.search(lowered):
         return False
     if not set(_numeric_tokens(answer)).issubset(_all_numbers(tool_result)):
         return False

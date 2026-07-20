@@ -55,11 +55,89 @@ def test_no_hallucinated_project_or_number(seeded_db):
     assert "حدد لي المشروع" in response
     assert not any(ch.isdigit() for ch in response)
 
-def test_return_to_portfolio_preserves_previous_project(seeded_db):
+def test_return_to_portfolio_clears_active_project_but_remembers_it(seeded_db):
+    # Regression test for the portfolio-contamination bug: leaving a project
+    # must NOT leave active_project_id set, or every following portfolio
+    # question (counts, filters, KPIs) silently gets scoped to it.
+    # last_active_project_id is the mechanism for "ارجع للمشروع" recall,
+    # not active_project_id.
     _add(project_name_ar="الباحث التجريبي الثاني"); sid = "v2-scope"
     answer("الباحث التجريبي الثاني", sid)
     assert "للمحفظة" in answer("ارجع للمحفظة", sid)["answer"]
-    assert session_context.get_context(sid)["active_project_id"] == "SYN-1"
+    ctx = session_context.get_context(sid)
+    assert ctx["active_project_id"] is None
+    assert ctx["active_scope"] == "portfolio"
+    assert ctx["last_active_project_id"] == "SYN-1"
+
+
+def test_portfolio_count_after_leaving_active_project_is_not_scoped_to_it(seeded_db):
+    _add(project_code="SYN-1", project_name_ar="الباحث التجريبي الثاني", status="Ongoing")
+    _add(project_code="SYN-OTHER", project_name_ar="مشروع تجريبي آخر", status="Ongoing")
+    sid = "v2-portfolio-count"
+    answer("الباحث التجريبي الثاني", sid)
+    answer("ارجع للمحفظة", sid)
+    result = aggregate_portfolio("status", "count", filters={"status": "Ongoing"})
+    assert result["value"] == 2
+
+
+def test_status_only_filter_with_arabic_alias(seeded_db):
+    _add(project_code="SYN-ON", project_name_ar="مشروع نشط تجريبي", status="Ongoing")
+    _add(project_code="SYN-OFF", project_name_ar="مشروع منتهي تجريبي", status="Completed")
+    matches = filter_projects({"status": "نشطة"})
+    ids = {row["project_id"] for row in matches}
+    assert "SYN-ON" in ids and "SYN-OFF" not in ids
+
+
+def test_status_and_department_filter_with_arabic_aliases(seeded_db):
+    _add(project_code="SYN-DEP1", project_name_ar="مشروع متخصص تجريبي",
+         status="Ongoing", dept="BPO-Specialized Pr")
+    _add(project_code="SYN-DEP2", project_name_ar="مشروع غير متخصص تجريبي",
+         status="Ongoing", dept="BPO - Inspection")
+    matches = filter_projects({"status": "جاري", "department": "المشاريع المتخصصة"})
+    ids = {row["project_id"] for row in matches}
+    assert "SYN-DEP1" in ids and "SYN-DEP2" not in ids
+
+
+def test_composite_situation_question_returns_more_than_status(seeded_db, monkeypatch):
+    _add(project_name_ar="مشروع الوضع التجريبي", status="Ongoing", profit_pct=18.0, risk=0)
+    sid = "v2-situation"
+    monkeypatch.setattr(config, "AZURE_OPENAI_KEY", "")  # exercise the deterministic composite path
+    answer("مشروع الوضع التجريبي", sid)
+    response = answer("وش وضعه؟", sid)["answer"]
+    assert "642,690" not in response  # sanity: not the raw un-formatted number
+    assert "حالة المشروع" in response
+    assert "قيمة الأعمال المتبقية" in response
+    assert "هامش الربح" in response
+    assert "status" not in response and "profit_pct" not in response
+
+
+def test_no_internal_field_names_in_date_answer(seeded_db):
+    _add(project_name_ar="مشروع التاريخ التجريبي", end_date=date(2027, 1, 7))
+    sid = "v2-date-leak"
+    answer("مشروع التاريخ التجريبي", sid)
+    response = answer("متى ينتهي عقده", sid)["answer"]
+    assert "end_date" not in response
+    assert "تاريخ الانتهاء" not in response  # internal label; a natural sentence is expected instead
+    assert "07/01/2027" in response
+
+
+def test_million_currency_formatting(seeded_db):
+    _add(project_name_ar="مشروع التنسيق التجريبي", backlog=55_282_379.76)
+    sid = "v2-format"
+    answer("مشروع التنسيق التجريبي", sid)
+    response = answer("كم باقي إيراد في المشروع؟", sid)["answer"]
+    assert "55.28 مليون ريال" in response
+    assert "55282379" not in response.replace(",", "")
+
+
+def test_correction_word_does_not_false_trigger_inside_project_name(seeded_db):
+    # "مش" (a CORRECTIONS token) is a literal substring of "المشروع" itself;
+    # this must not spuriously prefix every answer with "تصحيحًا:".
+    _add(project_name_ar="مشروع تجريبي عادي")
+    sid = "v2-no-false-correction"
+    answer("مشروع تجريبي عادي", sid)
+    response = answer("كم باقي إيراد في المشروع؟", sid)["answer"]
+    assert "تصحيحًا" not in response
 
 
 def _tool_response(name, arguments):
