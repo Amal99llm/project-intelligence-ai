@@ -60,7 +60,9 @@ def analyze_contract_request(query: str) -> ContractRequest | None:
                                                     "عقده بكم", "قيمه المشروع", "قيمة المشروع")):
         metrics = with_contract("total_contract_value")
 
-    if any(t in q for t in ("كم باقي", "باقي له", "باقي عليه", "باقي على", "قرب يخلص", "باقي كثير", "time is left", "time left", "remaining time", "how much remaining")):
+    timeline_metrics = {"start_date", "effective_end_date", "days_remaining"}
+    if (any(t in q for t in ("كم باقي", "باقي له", "باقي عليه", "باقي على", "قرب يخلص", "باقي كثير", "time is left", "time left", "remaining time", "how much remaining"))
+            and (not metrics or set(metrics) <= timeline_metrics)):
         return ContractRequest(tuple(metrics), "remaining")
     if any(t in q for t in ("كم مده", "كم مدة", "كم مدته", "من البدايه للنهايه", "من البداية للنهاية", "contract duration", "how long is the contract")):
         return ContractRequest(tuple(metrics), "duration")

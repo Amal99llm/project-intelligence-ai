@@ -72,6 +72,11 @@ SEMANTIC_INTERPRETER_ENABLED = os.environ.get(
     "SEMANTIC_INTERPRETER_ENABLED", "false"
 ).strip().lower() in {"1", "true", "yes", "on"}
 
+# Clean trusted-tool chat engine. Off by default for a controlled rollout.
+CHAT_ENGINE_V2_ENABLED = os.environ.get(
+    "CHAT_ENGINE_V2_ENABLED", "false"
+).strip().lower() in {"1", "true", "yes", "on"}
+
 # ── ChromaDB ──────────────────────────────────────────────────────────────────
 CHROMA_COLLECTION = "contracts"
 

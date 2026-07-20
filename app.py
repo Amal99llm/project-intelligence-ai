@@ -162,18 +162,22 @@ def ask():
 
     session_id = _get_session_id()
     try:
-        result = answer(
-            query      = query,
-            user_id    = request.headers.get("X-User-ID", "anonymous"),
-            source     = "flask_ui",
-            ip_address = request.remote_addr,
-            session_id = session_id,
-        )
+        if config.CHAT_ENGINE_V2_ENABLED:
+            from modules.chat_service import answer as answer_v2
+            result = answer_v2(query=query, session_id=session_id)
+        else:
+            result = answer(
+                query      = query,
+                user_id    = request.headers.get("X-User-ID", "anonymous"),
+                source     = "flask_ui",
+                ip_address = request.remote_addr,
+                session_id = session_id,
+            )
     except Exception:
         # modules.ai_engine.answer() already catches its own internal
         # exceptions and returns the Arabic fallback message -- this is a
         # last-resort net in case something above that layer still raises.
-        logger.exception("Unhandled error in /ask for query: %.60s", query)
+        logger.exception("Unhandled error in /ask")
         return jsonify({"answer": GENERIC_ERROR_MESSAGE, "query_type": "error"}), 200
     return jsonify(result)
 

@@ -111,7 +111,11 @@ FIELD_DEFINITIONS = (
     _f("revenue_current", "Revenue", "إيرادات الفترة الحالية", "Current-period revenue", ("current revenue", "revenue current"), dtype="money", unit="SAR", aggregate=True),
     _f("other_income", "Other Income", "إيرادات أخرى", "Other income", ("other income",), dtype="money", unit="SAR", aggregate=True),
     _f("total_revenue", "Total Revenue", "إجمالي الإيرادات", "Total revenue", ("الإيراد", "الإيرادات", "total revenue", "revenue"), ("كم جاب", "وش دخل", "وإيراداته"), dtype="money", unit="SAR", aggregate=True, default=True),
-    _f("backlog", "Backlog", "الأعمال المتبقية", "Backlog", ("المتبقي المالي", "قيمة الأعمال المتبقية", "الباكلوق", "backlog"), ("والباكلوق",), dtype="money", unit="SAR", aggregate=True, default=True),
+    _f("backlog", "Backlog", "الأعمال المتبقية", "Backlog", (
+        "كم باقي إيراد", "الإيراد المتبقي", "المتبقي من المشروع",
+        "كم باقي يتحقق", "الأعمال المتبقية", "قيمة الأعمال المتبقية",
+        "الباك لوق", "الباكلوق", "المتبقي المالي", "backlog",
+    ), ("والباكلوق",), dtype="money", unit="SAR", aggregate=True, default=True),
     _f("previous_years_cost", "Previous Years Cost", "تكاليف السنوات السابقة", "Previous years cost", ("previous cost",), dtype="money", unit="SAR", aggregate=True),
     _f("cost_of_revenue", "Cost of Revenue", "تكلفة الإيرادات", "Cost of revenue", ("cost of revenue",), dtype="money", unit="SAR", aggregate=True),
     _f("other_cost", "Other Cost", "تكاليف أخرى", "Other cost", ("other cost",), dtype="money", unit="SAR", aggregate=True),
@@ -263,7 +267,12 @@ CONCEPT_LEXICON: dict[str, tuple[str, ...]] = {
     "margin": ("هامش", "الهامش", "نسبه الربح", "نسبة الربح", "margin", "pm%"),
     "cost": ("تكلفه", "التكلفه", "تكاليف", "التكاليف", "مصروف", "cost", "costs", "expense"),
     "revenue": ("ايراد", "الايراد", "ايرادات", "الايرادات", "دخل", "revenue", "income"),
-    "backlog": ("اعمال متبقيه", "الأعمال المتبقية", "باقي فيه", "باكلوق", "باكلوج", "الباكلوق", "الباكلوج", "backlog"),
+    "backlog": (
+        "كم باقي ايراد", "الايراد المتبقي", "المتبقي من المشروع",
+        "كم باقي يتحقق", "اعمال متبقيه", "الأعمال المتبقية",
+        "قيمة الأعمال المتبقية", "باقي فيه", "باك لوق", "باكلوق",
+        "باكلوج", "الباكلوق", "الباكلوج", "backlog",
+    ),
     "risk": ("مخاطر", "المخاطر", "risk", "exposure"),
     "progress": ("انجاز", "الانجاز", "تقدم", "التقدم", "progress", "completion"),
     "start": ("بدايه", "البدايه", "بدا", "start", "commencement"),
@@ -314,7 +323,10 @@ def compose_canonical_fields(query: str) -> list[str]:
             add("previous_years_cost")
         else:
             add("total_cost")
-    if "revenue" in c:
+    # Backlog phrases may contain the word "revenue" or "remaining".  The
+    # more specific business concept owns those atoms; they must not emit a
+    # second, broader revenue or timeline field.
+    if "revenue" in c and "backlog" not in c:
         if "expected" in c:
             add("etc_revenue")
         elif "previous" in c:
@@ -338,9 +350,38 @@ def compose_canonical_fields(query: str) -> list[str]:
     return result
 
 
+_METRIC_NEGATIONS = tuple(normalize_text(value) for value in (
+    "مو", "مش", "ليس", "ليست", "لا أقصد", "not", "not the",
+))
+_METRIC_CLAUSE_BREAKS = re.compile(r"[,،;؛]|\b(?:لكن|بل|rather than)\b", re.IGNORECASE)
+
+
+def _positive_metric_text(query: str) -> str:
+    """Return only positively asserted clauses for field resolution.
+
+    Corrections often repeat the previous metric solely to reject it (for
+    example, ``مو النهاية، الإيرادات``).  Treating every field-shaped token
+    as a request made the rejected historical metric compete with the new
+    one.  Polarity belongs in the shared semantic layer so every caller sees
+    the same current-turn fields.
+    """
+    clauses = _METRIC_CLAUSE_BREAKS.split(str(query or ""))
+    positive = []
+    for clause in clauses:
+        normalized_clause = normalize_text(clause)
+        if not normalized_clause:
+            continue
+        if any(normalized_clause == marker or normalized_clause.startswith(marker + " ")
+               for marker in _METRIC_NEGATIONS):
+            continue
+        positive.append(clause)
+    return " ".join(positive) if positive else str(query or "")
+
+
 def detect_requested_fields(query: str) -> list[FieldDefinition]:
-    normalized = normalize_text(query)
-    composed_names = compose_canonical_fields(query)
+    metric_text = _positive_metric_text(query)
+    normalized = normalize_text(metric_text)
+    composed_names = compose_canonical_fields(metric_text)
     composed = [FIELDS[name] for name in composed_names if name in FIELDS]
     matches: list[tuple[int, FieldDefinition]] = []
     for field in FIELD_DEFINITIONS:

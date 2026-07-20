@@ -49,7 +49,7 @@ METRIC_RESPONSE_TEMPLATES = {
     "profit_pct": "هامش الربح الحالي يبلغ {value}.",
     "risk": "تبلغ قيمة المخاطر المسجلة {value}.",
     "total_revenue": "بلغت إيرادات المشروع {value}.",
-    "backlog": "تبلغ الأعمال المتبقية في المشروع {value}.",
+    "backlog": "قيمة الأعمال المتبقية (Backlog) للمشروع تبلغ {value}.",
     "contract_value": "قيمة العقد الأساسية {value}.",
     "amendment_crs": "تبلغ قيمة تعديلات العقد {value}.",
     "total_contract_value": "قيمة العقد الإجمالية بعد التعديلات {value}.",

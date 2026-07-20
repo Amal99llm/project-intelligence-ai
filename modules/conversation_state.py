@@ -9,6 +9,33 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+V2_DEFAULTS = {
+    "active_scope": "portfolio", "active_project_id": None, "active_project_name": None,
+    "last_active_project_id": None, "active_metric": None, "previous_metric": None,
+    "last_intent": None, "last_project_candidates": [], "last_project_list": [],
+    "active_comparison": [],
+}
+
+def v2_state(current: dict | None = None) -> dict:
+    """Return only the deliberately small v2 state contract."""
+    state = deepcopy(V2_DEFAULTS)
+    for key in state:
+        if current and key in current: state[key] = deepcopy(current[key])
+    return state
+
+def v2_activate_project(state: dict, project_id: str, name: str) -> dict:
+    out = v2_state(state); old = out.get("active_project_id")
+    if old and old != project_id: out["last_active_project_id"] = old
+    out.update(active_scope="project", active_project_id=project_id, active_project_name=name,
+               last_project_candidates=[], active_metric=None, previous_metric=out.get("active_metric"))
+    return out
+
+def v2_set_metric(state: dict, metric: str) -> dict:
+    out = v2_state(state)
+    if out.get("active_metric") != metric: out["previous_metric"] = out.get("active_metric")
+    out["active_metric"] = metric
+    return out
+
 SCOPES = {"portfolio", "project", "comparison", None}
 
 CANONICAL_FIELDS = (
